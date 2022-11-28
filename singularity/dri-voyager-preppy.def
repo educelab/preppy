@@ -1,0 +1,57 @@
+Bootstrap: docker
+From: python:3.10
+
+%labels
+  MAINTAINER Seth Parker <c.seth.parker@uky.edu>
+  OS Debian
+
+%files
+  /tmp/dri-voyager-preppy /usr/local/educelab/dri-voyager-preppy
+
+%post -c /bin/bash
+  # Basic installs
+  curl -fsSL https://deb.nodesource.com/setup_19.x | bash -
+  apt update
+  DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+      curl \
+      git \
+      nano \
+      tzdata \
+      vim \
+      imagemagick \
+      nodejs
+
+  # Install the other deps using node
+  npm install -g obj2gltf gltf-pipeline
+
+  # Create a venv for this project
+  python3 -m venv /usr/local/educelab/dri-voyager-preppy/.venv/
+
+  # Activate virtualenv
+  source /usr/local/educelab/dri-voyager-preppy/.venv/bin/activate
+
+  # Update pip
+  python3 -m pip install --upgrade pip wheel setuptools
+
+  # Install preppy
+  python3 -m pip install --editable /usr/local/educelab/dri-voyager-preppy
+
+  # Make writable
+  echo "Cleaning up installation directory..."
+  chmod --recursive a+rw /usr/local/educelab/
+  git config --global credential.helper cache
+  git config --global credential.helper 'cache --timeout=3600'
+  git config --global --add safe.directory /usr/local/educelab/dri-voyager-preppy/
+
+%runscript
+#!/bin/bash
+  if [ $# -lt 1 ]; then
+      echo "Usage: ./container <command>"
+      exit 1
+  fi
+
+  source /usr/local/educelab/dri-voyager-preppy/.venv/bin/activate
+  exec "$@"
+
+%help
+  This container provides an environment for running DRI Voyager Preppy.
