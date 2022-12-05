@@ -1,5 +1,5 @@
 Bootstrap: docker
-From: python:3.10
+From: python:3.10-slim
 
 %labels
   MAINTAINER Seth Parker <c.seth.parker@uky.edu>
@@ -14,7 +14,10 @@ From: python:3.10
   apt update
   DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
       curl \
+      gcc \
+      g++ \
       git \
+      make \
       nano \
       tzdata \
       vim \

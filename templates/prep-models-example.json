@@ -1,0 +1,15 @@
+[
+    {
+        "obj": "path/to/obj/file01.obj",
+        "stem": "ShortName01",
+        "title": "Long name 1",
+        "titles": {
+            "EN": "Long name (English)"
+          }
+    },
+    {
+        "obj": "path/to/obj/file02.obj",
+        "stem": "ShortName02",
+        "title": "Long name 2"
+    }
+]
