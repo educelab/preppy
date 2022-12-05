@@ -7,10 +7,11 @@ stages:
   before_script:
     - curl -fsSL https://deb.nodesource.com/setup_19.x | bash -
     - apt update
-    - apt install -y imagemagick nodejs
+    - apt install -y imagemagick nodejs gcc g++ make
     - apt upgrade -y
     - python -m pip install --upgrade pip setuptools wheel
-    - npm install -g obj2gltf gltf-pipeline
+    - npm config set registry https://registry.npmjs.org/
+    - npm install -g cesium@1.99.0 obj2gltf gltf-pipeline
   script:
     - python -m pip install .
     - voyager-preppy -h

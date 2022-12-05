@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitlab.com/educelab/dri-voyager-preppy/prep-models.schema.json",
+  "title": "DRI Voyager Data Prep Input File",
+  "description": "An input file to the DRI voyager-preppy data preparation application",
+  "type": "array",
+  "uniqueItems": true,
+  "items": {
+    "type": "object",
+    "properties": {
+      "obj": {
+        "description": "Path to the input obj file",
+        "type": "string"
+      },
+      "stem": {
+        "description": "Unique file stem (short name) to be used when referencing the current object",
+        "type": "string"
+      },
+      "title": {
+        "description": "Human-readable title for UI display",
+        "type": "string"
+      },
+      "titles": {
+        "type": "object",
+        "description": "Dictionary of locale-specific titles"
+      }
+    },
+    "required": ["obj", "stem", "title"]
+  }
+}
