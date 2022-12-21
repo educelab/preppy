@@ -1,6 +1,4 @@
-import json
-from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict
 
 
 def default_scene() -> Dict:
@@ -52,17 +50,3 @@ def default_scene() -> Dict:
             }
         ]
     }
-
-
-def write_items_file(output_path: Union[str, Path], data: List):
-    """Write an items.json file for DRI Voyager"""
-    # Uses custom json formatting
-    with Path(output_path).open('w', encoding='utf8') as of:
-        of.write('[\n')
-        for idx, line in enumerate(data):
-            of.write('  ')
-            json.dump(line, of)
-            if idx != len(data) - 1:
-                of.write(',')
-            of.write('\n')
-        of.write(']\n')
