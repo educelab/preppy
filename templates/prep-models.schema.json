@@ -1,30 +1,64 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gitlab.com/educelab/dri-voyager-preppy/prep-models.schema.json",
+
   "title": "DRI Voyager Data Prep Input File",
   "description": "An input file to the DRI voyager-preppy data preparation application",
+
   "type": "array",
-  "uniqueItems": true,
   "items": {
-    "type": "object",
-    "properties": {
-      "obj": {
-        "description": "Path to the input obj file",
-        "type": "string"
+    "anyOf": [{"$ref": "#/$defs/document"},{"$ref": "#/$defs/documentGroup"}]
+  },
+  "uniqueItems": true,
+  "minItems": 1,
+
+  "$defs": {
+    "document": {
+      "description": "Configuration for a single document",
+      "type": "object",
+      "properties": {
+        "obj": {
+          "description": "Path to the input obj file",
+          "type": "string"
+        },
+        "stem": {
+          "description": "Unique file stem (short name) to be used when referencing the current object",
+          "type": "string"
+        },
+        "title": {
+          "description": "Human-readable title for main UI (i.e. displayed in the model viewer)",
+          "type": "string"
+        },
+        "navTitle": {
+          "description": "Human-readable title for navigation UI (i.e. displayed in the navigation menu)",
+          "type": "string"
+        },
+        "titles": {
+          "type": "object",
+          "description": "Dictionary of locale-specific titles"
+        }
       },
-      "stem": {
-        "description": "Unique file stem (short name) to be used when referencing the current object",
-        "type": "string"
-      },
-      "title": {
-        "description": "Human-readable title for UI display",
-        "type": "string"
-      },
-      "titles": {
-        "type": "object",
-        "description": "Dictionary of locale-specific titles"
-      }
+      "required": ["obj", "stem", "title"]
     },
-    "required": ["obj", "stem", "title"]
+
+    "documentGroup": {
+      "description": "Named group of document configurations",
+      "type": "object",
+      "properties": {
+        "title": {
+          "description": "Human-readable title for the document group",
+          "type": "string"
+        },
+        "documents": {
+          "description": "List of documents in the group",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/document"
+          },
+          "minItems": 1
+        }
+      },
+      "required": ["title", "documents"]
+    }
   }
 }

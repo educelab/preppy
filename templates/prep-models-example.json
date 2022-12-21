@@ -10,6 +10,18 @@
     {
         "obj": "path/to/obj/file02.obj",
         "stem": "ShortName02",
-        "title": "Long name 2"
+        "title": "Long name 2",
+        "navTitle": "Nav title"
+    },
+    {
+        "title": "Group name",
+        "documents": [
+            {
+                "obj": "path/to/obj/sub/file03.obj",
+                "stem": "ShortName03",
+                "title": "Group name, item name 3",
+                "navTitle": "Item name 3"
+            }
+        ]
     }
 ]
