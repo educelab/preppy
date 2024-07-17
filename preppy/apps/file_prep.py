@@ -59,7 +59,7 @@ def process_model(model, out_dir, glb_dir, img_fmt, img_dim, tmp_dir, compress,
 
     # Write Voyager json for this model
     json_data = generate_voyager_scene(model, uri, glb_path)
-    json_file = f'{model["stem"]}.json'
+    json_file = f'{model["stem"]}.svx.json'
     json_path = out_dir / json_file
     with json_path.open('w', encoding='utf8') as of:
         json.dump(json_data, of, indent=4)
