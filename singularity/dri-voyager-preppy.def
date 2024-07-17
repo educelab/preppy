@@ -24,7 +24,7 @@ From: python:3.11-slim
       imagemagick
 
   # Install nodejs
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
       nodejs
   node -v
