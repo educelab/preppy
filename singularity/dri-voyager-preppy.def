@@ -10,7 +10,6 @@ From: python:3.10-slim
 
 %post -c /bin/bash
   # Basic installs
-  curl -fsSL https://deb.nodesource.com/setup_19.x | bash -
   apt update
   DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
       curl \
@@ -21,7 +20,11 @@ From: python:3.10-slim
       nano \
       tzdata \
       vim \
-      imagemagick \
+      imagemagick
+
+  # Install nodejs
+  curl -fsSL https://deb.nodesource.com/setup_19.x | bash -
+  DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
       nodejs
 
   # Install the other deps using node
