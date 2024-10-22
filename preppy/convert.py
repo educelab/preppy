@@ -1,3 +1,4 @@
+import platform
 import shutil
 import subprocess as sp
 from pathlib import Path
@@ -95,8 +96,10 @@ def obj_to_glb(obj_file: Union[str, Path], glb_file: Union[str, Path],
         glb_file: Path to output glb file
         compress: If True, convert apply DRACO compression
     """
+    is_windows = platform.system() == 'Windows'
+
     # Convert to glb
-    cmd = ['obj2gltf',
+    cmd = ['obj2gltf.cmd' if is_windows else 'obj2gltf',
            '-i', str(obj_file),
            '-o', str(glb_file)
            ]
@@ -106,7 +109,7 @@ def obj_to_glb(obj_file: Union[str, Path], glb_file: Union[str, Path],
         return
 
     # Compress glb
-    cmd = ['gltf-pipeline',
+    cmd = ['gltf-pipeline.cmd' if is_windows else 'gltf-pipeline',
            '-i', str(glb_file),
            '-o', str(glb_file),
            '-d',

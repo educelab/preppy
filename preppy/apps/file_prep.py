@@ -168,7 +168,7 @@ def main():
         # Handle single documents
         else:
             outer.set_description_str(f'Prepping model {model["title"]}')
-            item = process_model(model=model, *kwargs)
+            item = process_model(model=model, **kwargs)
         items.append(item)
     del outer, inner
 
