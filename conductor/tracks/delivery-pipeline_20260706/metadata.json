@@ -1,0 +1,11 @@
+{
+  "id": "delivery-pipeline_20260706",
+  "title": "Delivery pipeline (meshopt geometry + KTX2 + manifest)",
+  "type": "feature",
+  "status": "pending",
+  "created": "2026-07-06T18:56:11Z",
+  "updated": "2026-07-06T18:56:11Z",
+  "depends_on": ["toolchain-spike_20260706"],
+  "phases": { "total": 4, "completed": 0 },
+  "tasks": { "total": 13, "completed": 0 }
+}
