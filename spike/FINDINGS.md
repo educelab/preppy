@@ -177,7 +177,8 @@ the mesh (keep the loaded node hierarchy; never bake into the quantized position
   it is *not* the downscale and *not* ETC1S (decoded KTX2 == source). **Pipeline must
   dilate/pad atlas charts** (edge-extend into the no-data region) before KTX2 encoding, or
   have the MVS texturing step emit dilated atlases.
-- **Units:** distances are in **source units**; likely **mm** (user to confirm externally).
+- **Units:** distances are in **cm** (confirmed; bbox diagonal ≈ 57.6 cm matches the
+  tens-of-cm trays). Manifest `units:"cm"`.
 
 ### Phase 2 verification — CONFIRMED (viewer session, BUILD v8)
 - 2.1 GLTFLoader + MeshoptDecoder + KTX2Loader + OrbitControls render the decimated
