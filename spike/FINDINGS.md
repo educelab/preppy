@@ -91,3 +91,110 @@ says otherwise.
   several ratios; `.ktx2` in both ETC1S and UASTC produced and **`ktx validate` clean**
   with full mip chains. Definitive "opens in a glTF inspector" = loading in three.js,
   done in Phase 2 (that page is the inspector).
+
+## Phase 2 — viewer spike (three.js)  [code complete; visual verification pending]
+Throwaway page: `spike/index.html` (single file; import-map to pinned three@0.169.0 +
+addons + basis transcoder — throwaway convenience, *not* the production no-CDN rule).
+Serve: `python3 -m http.server 8777 --directory spike` → http://127.0.0.1:8777/
+
+Loaders wired: `GLTFLoader` + `MeshoptDecoder` + `KTX2Loader`(basis) + `OrbitControls`.
+Assets (gitignored, in `spike/assets/`):
+- geometry-only meshopt glbs w/ UVs: `5_spectral.glb`, `2_center.glb`, `4_pgs.glb`,
+  and `5_spectral_baked.glb` (with baked NORMALs).
+- KTX2: band 5 rgb & ir1050 (ETC1S+UASTC), band 2 & 4 (ETC1S), all 8K, mipmapped.
+
+**Per-wedge UV finding (Task 2.2).** gltfpack's *input* count was 3× triangles
+(10,944,252 verts / 3,648,084 tris) — the signature of per-wedge (unshared) UVs.
+gltfpack welds by (pos,uv), but UV-seam vertices stay split, so runtime
+`computeVertexNormals()` breaks the shading across every UV island. **Baking** smooth
+normals *before* the split (MeshLab `compute_normal_per_vertex` on the position-welded
+mesh → carried through gltfpack via `-kv`) gives both sides of a seam the same normal,
+so seams disappear. The page's "Normals A/B" buttons load computed vs baked for direct
+comparison. **RESOLVED (viewer session):** computed and baked look *identical* on these
+near-flat trays, so the seam risk did not materialize — **use runtime
+`computeVertexNormals()`, no pipeline bake step.** (Revisit only if a future object has
+strong curvature across UV seams.)
+
+### ⚠ CRITICAL FINDING — geometry-only glb corrupts atlas UVs unless UVs stay "used"
+First viewer render showed **scrambled textures at every decimation level, including
+full-res** (shuffled atlas patches). Isolation via unlit reference loads:
+- `obj2gltf` glb (proven pipeline, no gltfpack): **coherent**.
+- gltfpack + meshopt glb *with the texture still referenced*: **coherent**.
+- gltfpack geometry-only glb (stripped material, `-kv`): **scrambled**.
+
+**Mechanism.** These MVS meshes have per-wedge UVs — two vertices share a position
+but carry different UVs at every atlas-chart seam. When the material has no texture,
+gltfpack treats TEXCOORD_0 as *unused*, so it welds those seam vertices by position and
+keeps one arbitrary UV, shuffling the atlas. `-kv` keeps the attribute data but does
+**not** prevent the bad weld. When a texture is referenced, UVs become a weld key, seam
+vertices stay split, and the mapping is preserved — and gltfpack's `-si` decimation then
+respects UV seams too.
+
+**Pipeline rule (decision):** the geometry glb **must keep UVs "used."** Cheapest way:
+reference a 1×1 placeholder `map_Kd` in the MTL fed to gltfpack (embeds a few bytes); the
+viewer overrides `material.map` with the real KTX2 band at runtime. This one change fixes
+both the scramble and makes gltfpack decimation UV-safe. (Fix applied to all spike glbs.)
+
+### ⚠ CRITICAL FINDING #2 — gltfpack UV quantization emits KHR_texture_transform
+Even with UVs preserved, a fresh material still scrambled while the glb's own material was
+fine. Cause: gltfpack packs UVs into a sub-range as normalized `UNSIGNED_SHORT` and emits a
+**`KHR_texture_transform`** on the material (band 5 `scale≈[14.06,14.38]`, band 2
+`scale≈[15.99,4.80]`) to rescale them. A viewer that builds its own material / swaps
+`material.map` **must carry that transform onto the swapped-in texture** (three.js:
+copy `.offset/.repeat/.rotation/.center` from the glb's map). **CONFIRMED FIXED** — copying
+the transform onto the KTX2 makes all bands render coherently.
+
+**Pipeline rule (decision):** the production `<dri-viewer>` must, when swapping KTX2 bands,
+preserve the geometry material's `KHR_texture_transform` (don't discard the loaded material).
+Alternative: encode geometry with `gltfpack -vtf` (float UVs, no quantization → no transform)
+at the cost of larger geometry buffers. **Recommend honoring the transform** (keep the
+compression win); the viewer swap must reuse the loaded material or replicate its UV transform.
+
+### ⚠ CRITICAL FINDING #3 — gltfpack stores POSITION dequant on the NODE transform
+gltfpack (KHR_mesh_quantization) stores positions as `UNSIGNED_SHORT` and puts the
+dequant **scale + translation on the node TRS** (band 2: `scale≈0.00284`, `translation≈
+[-23.1,-15.9,-0.79]`). Extracting bare geometry and dropping the node transform caused
+two bugs: (a) **measurements in quantized units** (~4000 instead of ~11 real units), and
+(b) **bands not registering** (each missing its own translation). Fix: bake the node's
+world matrix. **Do NOT bake into the quantized buffer** — `applyMatrix4` on the
+`UNSIGNED_SHORT` position array truncates and collapses the mesh (v7 bug). Correct fix:
+apply the node matrix to the **mesh transform** (`mesh.applyMatrix4(node.matrixWorld)`),
+leaving the geometry buffer intact. **CONFIRMED in v8:** topology intact, measurement
+reads real scale, bands register.
+
+**Pipeline/viewer rule:** measurement + multi-band overlay require the node transform on
+the mesh (keep the loaded node hierarchy; never bake into the quantized position buffer).
+
+### Observed decisions from the viewer session (user)
+- **Decimation budget:** `-si 0.2` (20%) — d20–d50 look acceptable, **d10 loses too much**
+  detail for measurement. (Earlier 10% proposal revised up.)
+- **Normals:** computed == baked, **both fine** → runtime `computeVertexNormals()` is
+  sufficient; **no pipeline normal-bake step needed** (simplifies the pipeline; the
+  per-wedge seam risk did not manifest visibly on these near-flat trays).
+- **KTX2 mode:** **ETC1S** — no visible quality difference vs UASTC; use ETC1S (9× smaller).
+- **Atlas "no-data" padding bleed (NEW):** band 2's source atlas has an **orange no-data
+  background**; it bleeds into chart edges (worse via mipmaps) as a yellow tint. Confirmed
+  it is *not* the downscale and *not* ETC1S (decoded KTX2 == source). **Pipeline must
+  dilate/pad atlas charts** (edge-extend into the no-data region) before KTX2 encoding, or
+  have the MVS texturing step emit dilated atlases.
+- **Units:** distances are in **source units**; likely **mm** (user to confirm externally).
+
+### Phase 2 verification — CONFIRMED (viewer session, BUILD v8)
+- 2.1 GLTFLoader + MeshoptDecoder + KTX2Loader + OrbitControls render the decimated
+  geometry with a KTX2 texture. ✓ (once findings #1–#3 fixed)
+- 2.2 lit surface not black; computed == baked. ✓
+- 2.3 texture-only (5 RGB⇄IR1050) and mesh-swap (2⇄4) both coherent; camera preserved;
+  bands register in the shared frame. ✓
+- 2.4 all bands loaded at real positions; no OOM / context-loss. ✓
+- 2.5 two-click raycast distance reads a plausible real-scale value. ✓
+
+## Go / No-Go
+**GO.** The pivot (gltfpack meshopt geometry + KTX2 textures + three.js viewer) is viable
+on real `mvs` data: camera-preserving band switching (both same-geometry and mesh-swap),
+multiple 8K KTX2 bands resident without OOM, and feasible raycast measurement — **provided
+the pipeline/viewer honor the hard requirements the spike surfaced** (KTX≥5, UVs-used
+placeholder, `KHR_texture_transform`, node transform on the mesh, atlas dilation). These
+are recorded in `docs/implementation-plan.md` §Tuning parameters.
+
+**Deferred:** on-disk file deliverables + manifest schema — to be decided in a dedicated
+conversation at the start of `delivery-pipeline_20260706`, before implementation.

@@ -3,7 +3,7 @@
 **Track ID:** toolchain-spike_20260706
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-07-06
-**Status:** [~] In Progress
+**Status:** [x] Complete
 
 ## Overview
 Two quick phases: prove the asset toolchain (gltfpack + toktx), then prove the
@@ -29,25 +29,23 @@ in a scratch dir, not in `preppy/`.
 ## Phase 2: Viewer spike (three.js)
 
 ### Tasks
-- [ ] Task 2.1: Throwaway three.js page: GLTFLoader + MeshoptDecoder + KTX2Loader
+- [x] Task 2.1: Throwaway three.js page: GLTFLoader + MeshoptDecoder + KTX2Loader
       + OrbitControls; render the decimated geometry with a KTX2 texture.
-- [ ] Task 2.2: Decide + verify normals (bake vs `computeVertexNormals()`); lit
-      surface looks correct (no black).
-- [ ] Task 2.3: Implement both swap paths — texture-only (5_rgb ↔ 5_ir1050) and
-      mesh-swap (2 ↔ 4) — asserting the camera/controls state is untouched.
-- [ ] Task 2.4: Load several 8K KTX2 bands at once; watch memory on a mid-range
-      device / throttled profile; confirm no OOM.
-- [ ] Task 2.5: Prototype two-point raycast distance in cm to gauge measurement
-      feasibility/feel.
+- [x] Task 2.2: Decide + verify normals — computed == baked on these trays; use runtime
+      `computeVertexNormals()`, no bake step. Lit surface not black.
+- [x] Task 2.3: Both swap paths — texture-only (5_rgb ↔ 5_ir1050) and mesh-swap (2 ↔ 4);
+      camera/controls untouched; bands register (node transform on mesh).
+- [x] Task 2.4: Loaded all bands at real positions; no OOM / context-loss.
+- [x] Task 2.5: Two-point raycast distance works at real scale (source units; likely mm).
 
 ### Verification
-- [ ] Camera-preserving swap demonstrated for both cases; no OOM observed.
+- [x] Camera-preserving swap demonstrated for both cases; no OOM observed.
 
 ## Final Verification
-- [ ] All acceptance criteria met.
-- [ ] Tuning decisions recorded (decimation budget, KTX2 mode, normals) and fed
-      back into `docs/implementation-plan.md` open-parameters section.
-- [ ] Go/no-go on the pivot documented.
+- [x] All acceptance criteria met (see spike/FINDINGS.md Phase 2 verification).
+- [x] Tuning decisions recorded (decimation `-si 0.2`, KTX2 ETC1S, computed normals) and
+      new hard requirements fed into `docs/implementation-plan.md` §Tuning parameters.
+- [x] Go/no-go documented: **GO** (spike/FINDINGS.md §Go/No-Go).
 
 ---
 

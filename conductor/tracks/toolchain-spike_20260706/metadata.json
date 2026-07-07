@@ -2,13 +2,13 @@
   "id": "toolchain-spike_20260706",
   "title": "Toolchain spike (de-risk the approach)",
   "type": "chore",
-  "status": "in_progress",
+  "status": "complete",
   "created": "2026-07-06T18:56:11Z",
-  "updated": "2026-07-06T19:22:07Z",
+  "updated": "2026-07-07T00:01:51Z",
   "depends_on": [],
-  "current_phase": 1,
-  "current_task": "2.1",
-  "phases": { "total": 2, "completed": 1 },
-  "tasks": { "total": 9, "completed": 4 },
-  "commits": []
+  "current_phase": 2,
+  "current_task": "2.5",
+  "phases": { "total": 2, "completed": 2 },
+  "tasks": { "total": 9, "completed": 9 },
+  "commits": ["ccafc9a: spike(toolchain): Phase 1 asset spike — gltfpack + KTX2 findings"]
 }
