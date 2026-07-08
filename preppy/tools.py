@@ -58,6 +58,9 @@ class ToolSpec:
 # is still required; ``obj2gltf`` / ``gltf-pipeline`` are intentionally absent
 # (legacy path, deprecated).
 TOOLS: Dict[str, ToolSpec] = {
+    # `magick` is the ImageMagick 7 driver used by texture.py (src -> dst
+    # conversion); `mogrify` is kept for the legacy convert.py path.
+    'magick': ToolSpec('magick', node_cli=False, version_args=('--version',)),
     'mogrify': ToolSpec('mogrify', node_cli=False, version_args=('--version',)),
     'ktx': ToolSpec('ktx', node_cli=False, version_args=('--version',),
                     min_version=(5, 0, 0)),
