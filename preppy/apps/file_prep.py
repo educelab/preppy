@@ -123,6 +123,23 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     geom = geometry.obj_to_geometry_glb(
         obj_path, var_tmp / 'geom.glb', target_error=opts.target_error)
 
+    # 3b. Optional Hausdorff gate on the decimation (opt-in; pymeshlab can't read
+    #     the meshopt glb, so validate a plain re-pack at the same -si). Runs
+    #     before the asset is written, so an over-budget variant fails clean.
+    if opts.validate and opts.target_error is not None:
+        plain = geometry.obj_to_geometry_glb(
+            obj_path, var_tmp / 'geom_plain.glb', target_error=opts.target_error,
+            meshopt=False, quantize=False)
+        res = geometry.validate(obj_path, plain, budget=opts.deviation_budget)
+        detail = f'max={res.max_distance:.4g}'
+        if res.max_fraction_of_diagonal is not None:
+            detail += f' ({res.max_fraction_of_diagonal * 100:.3g}% of bbox)'
+        if res.within_budget is False:
+            raise RuntimeError(
+                f'variant {suffix!r}: decimation deviation {detail} exceeds '
+                f'--deviation-budget {opts.deviation_budget}')
+        print(f'  validated {suffix}: Hausdorff {detail}')
+
     # 4. Name the output asset (content hash over inputs+config, never output).
     digest = None
     if opts.hash_names:
@@ -226,6 +243,13 @@ def _build_parser() -> argparse.ArgumentParser:
                                f'(default: {DEFAULT_TARGET_ERROR})')
     geo_opts.add_argument('--no-decimate', action='store_true',
                           help='Meshopt-compress without simplifying (skip -si)')
+    geo_opts.add_argument('--validate', action='store_true',
+                          help='Hausdorff-validate each decimation (needs the '
+                               'pymeshlab extra; adds a plain gltfpack pass)')
+    geo_opts.add_argument('--deviation-budget', type=float, default=None,
+                          metavar='FLOAT',
+                          help='Max allowed Hausdorff deviation in mesh units; '
+                               'over budget fails the run (report-only if unset)')
 
     out_opts = parser.add_argument_group('output options')
     out_opts.add_argument('--hash-names', default=True,

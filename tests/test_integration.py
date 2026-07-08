@@ -135,3 +135,13 @@ def test_pipeline_no_hash_names_stable_assets(sample):
     assert {v['uri'] for v in man['variants']} == {'MVS_rgb.glb', 'MVS_ir.glb'}
     for v in man['variants']:
         assert (out_dir / 'MVS' / v['uri']).is_file()
+
+
+def test_pipeline_validate_gate_runs(sample):
+    pytest.importorskip('pymeshlab')
+    config_path, out_dir = sample
+    # Generous budget: the decimation of this tiny mesh is well within it.
+    _run(config_path, out_dir, '--validate', '--deviation-budget', '1.0')
+    man = json.loads((out_dir / 'MVS' / 'manifest.json').read_text())
+    for v in man['variants']:
+        assert (out_dir / 'MVS' / v['uri']).is_file()
