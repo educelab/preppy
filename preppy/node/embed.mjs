@@ -68,9 +68,16 @@ async function main() {
   for (const mat of materials) {
     const name = mat.getName();
     const file = opts.map[name];
-    if (!file) throw new Error(`no KTX2 mapped for material "${name}"`);
+    if (!file) {
+      // A material we were not asked to remap (e.g. an unused MTL 'default'
+      // with no map_Kd). Leave it untouched.
+      if (mat.getBaseColorTexture()) {
+        console.error(`note: material "${name}" not in map; keeping its original texture`);
+      }
+      continue;
+    }
     const tex = mat.getBaseColorTexture();
-    if (!tex) throw new Error(`material "${name}" has no baseColorTexture`);
+    if (!tex) throw new Error(`material "${name}" has no baseColorTexture to replace`);
     tex.setImage(new Uint8Array(readFileSync(file))).setMimeType('image/ktx2');
     if (opts.opaque) {
       const f = mat.getBaseColorFactor();
