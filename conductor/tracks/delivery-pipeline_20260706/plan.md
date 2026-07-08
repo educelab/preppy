@@ -39,7 +39,7 @@ self-contained glb.
 
 ## Phase 2: Leaf modules (A2)
 ### Tasks
-- [ ] Task 2.1: `texture.py` — `normalize(src, nodata_fill=None)` (mogrify
+- [x] Task 2.1: `texture.py` — `normalize(src, nodata_fill=None)` (mogrify
       CIELab/16-bit → 8-bit sRGB, resize `>8192`, edge-dilate over `nodata_fill`)
       + `encode_ktx2(png, mode)` (`ktx create`, mips, ETC1S|UASTC).
 - [ ] Task 2.2: `geometry.py` — `obj_to_geometry_glb()` (gltfpack geometry+UV,
