@@ -1,0 +1,36 @@
+{
+  "status": "complete",
+  "project_type": "brownfield",
+  "current_section": "styleguides",
+  "current_question": 2,
+  "completed_sections": ["product", "guidelines", "tech_stack", "workflow", "styleguides"],
+  "answers": {
+    "setup_mode": "fast-track from design session",
+    "product_name": "DRI Voyager Preppy",
+    "languages": ["Python 3.11+", "TypeScript", "HTML/CSS"],
+    "node": "20+",
+    "deps_upgrade": "Python and deps open to upgrade; Node now required",
+    "database": "none (static file output)",
+    "infrastructure": "static hosting + Singularity container; GitLab CI",
+    "tdd": "flexible",
+    "commits": "descriptive, no strict format",
+    "code_review": "required for non-trivial (GitLab MRs into develop)",
+    "verification": "after each phase",
+    "styleguides": ["python", "typescript", "html-css", "general"]
+  },
+  "files_created": [
+    "conductor/setup_state.json",
+    "conductor/index.md",
+    "conductor/product.md",
+    "conductor/product-guidelines.md",
+    "conductor/tech-stack.md",
+    "conductor/workflow.md",
+    "conductor/tracks.md",
+    "conductor/code_styleguides/python.md",
+    "conductor/code_styleguides/typescript.md",
+    "conductor/code_styleguides/html-css.md",
+    "conductor/code_styleguides/general.md"
+  ],
+  "started_at": "2026-07-06T18:56:11Z",
+  "last_updated": "2026-07-06T18:56:11Z"
+}

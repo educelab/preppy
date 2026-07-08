@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRI toolchain spike — three.js viewer</title>
+<style>
+  :root { color-scheme: dark; }
+  html,body { margin:0; height:100%; background:#111; color:#ddd; font:13px/1.4 ui-monospace,Menlo,monospace; }
+  #app { position:fixed; inset:0; }
+  #ui { position:fixed; top:10px; left:10px; width:340px; max-height:95vh; overflow:auto;
+        background:rgba(20,20,24,.88); padding:12px; border:1px solid #333; border-radius:8px; }
+  #ui h1 { font-size:13px; margin:0 0 8px; color:#fff; }
+  button { display:block; width:100%; margin:4px 0; padding:7px 8px; text-align:left;
+           background:#26304a; color:#e6ecff; border:1px solid #3a4a66; border-radius:5px; cursor:pointer; }
+  button:hover { background:#33406a; }
+  button.on { background:#2f6a3f; }
+  .row { display:flex; gap:6px; } .row button { margin:4px 0; }
+  #log { margin-top:10px; padding-top:8px; border-top:1px solid #333; white-space:pre-wrap;
+         font-size:12px; color:#9fb; max-height:40vh; overflow:auto; }
+  .warn { color:#fb8; } .err { color:#f77; } .ok { color:#8f8; } .dim { color:#89a; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="ui">
+  <h1>DRI toolchain spike — BUILD v8</h1>
+  <button id="btnTexSwap">Texture-only swap — band 5: RGB ⇄ IR1050</button>
+  <button id="btnMeshSwap">Mesh swap — band 2 ⇄ band 4</button>
+  <div class="row">
+    <button id="btnKtxMode">KTX2 mode: ETC1S</button>
+    <button id="btnNormals">Normals: computed</button>
+  </div>
+  <button id="btnDecim">Decimation: full (100%) — click to cycle</button>
+  <button id="btnUvDec">FIX test — band 2 @10% UV-aware (MeshLab) decimation</button>
+  <div class="row">
+    <button id="btnRefO2g">REF: obj2gltf (golden, own tex, unlit)</button>
+    <button id="btnRefGp">REF: gltfpack+tex (own tex, unlit)</button>
+  </div>
+  <div class="row">
+    <button id="btnBakedA">Normals A/B: computed (band5)</button>
+    <button id="btnBakedB">Normals A/B: baked (band5)</button>
+  </div>
+  <button id="btnAll">Load ALL bands (memory test)</button>
+  <button id="btnMeasure">Measure mode: OFF</button>
+  <button id="btnReset">Reset to band 5 (RGB)</button>
+  <div id="log"></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+const BASIS = 'https://unpkg.com/three@0.169.0/examples/jsm/libs/basis/';
+const logEl = document.getElementById('log');
+const log = (m, cls='') => { const d=document.createElement('div'); if(cls)d.className=cls; d.textContent=m; logEl.prepend(d); };
+
+// ---- renderer / scene / camera ----
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+app.appendChild(renderer.domElement);
+renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); log('⚠ WEBGL CONTEXT LOST — likely OOM', 'err'); });
+
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x15171c);
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.01, 5000);
+camera.position.set(0, 0, 60);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.1));
+const dir = new THREE.DirectionalLight(0xffffff, 1.4); dir.position.set(1,1,2); scene.add(dir);
+const dir2 = new THREE.DirectionalLight(0xffffff, 0.8); dir2.position.set(-1,-0.5,-1); scene.add(dir2);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+(function tick(){ requestAnimationFrame(tick); controls.update(); renderer.render(scene, camera); })();
+
+// ---- loaders ----
+const ktx2 = new KTX2Loader().setTranscoderPath(BASIS).detectSupport(renderer);
+const gltf = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
+
+// ---- asset registry (relative to spike/) ----
+const A = 'assets/';
+const STEM = { '5':'5_spectral', '2':'2_center', '4':'4_pgs' };
+const DECIM_LEVELS = ['full','r50','r20','r10'];   // r10 = <stem>.glb; full/r50/r20 exist for bands 2 & 5
+let decim = 'full';   // boot at full-res through MY KTX2 path to isolate decimation vs path
+function geoFile(geoKey){
+  if(geoKey==='5b') return '5_spectral_baked.glb';
+  if(geoKey==='2u') return '2_center_uvdec.glb';
+  const stem = STEM[geoKey];
+  if(decim==='r10') return stem+'.glb';
+  if(geoKey==='4') return stem+'.glb';             // band 4 only has r10 variant
+  return `${stem}_${decim}.glb`;
+}
+const TEX = {
+  '5_rgb':    { etc1s:'5_spectral_rgb_etc1s.ktx2',    uastc:'5_spectral_rgb_uastc.ktx2' },
+  '5_ir1050': { etc1s:'5_spectral_ir1050_etc1s.ktx2', uastc:'5_spectral_ir1050_uastc.ktx2' },
+  '2':        { etc1s:'2_center_etc1s.ktx2' },
+  '4':        { etc1s:'4_pgs_etc1s.ktx2' },
+};
+
+const geoCache = new Map(), texCache = new Map();
+let ktxMode = 'etc1s', normalsMode = 'computed';
+let current = null;              // { mesh, geoKey, texKey }
+let measure = false; const picks = []; let measureGroup = new THREE.Group(); scene.add(measureGroup);
+
+async function loadGeometry(key){
+  const file = geoFile(key);
+  if(geoCache.has(file)) return geoCache.get(file);
+  const g = await gltf.loadAsync(A+file);
+  let rec = { geom:null, xform:null };
+  g.scene.updateWorldMatrix(true, true);
+  g.scene.traverse(o=>{ if(o.isMesh){
+    // gltfpack (KHR_mesh_quantization) stores the POSITION dequant scale/offset on the NODE
+    // transform, and the position buffer is quantized UNSIGNED_SHORT. Do NOT bake into the
+    // buffer (it truncates). Instead keep the geometry as-is and carry the node's world matrix
+    // to apply to the *mesh transform* — real world scale + band registration, quantization intact.
+    rec.geom = o.geometry; rec.matrix = o.matrixWorld.clone();
+    // gltfpack packs UVs into a sub-range + emits KHR_texture_transform on the material;
+    // GLTFLoader has already baked it onto the placeholder map. Capture it so we can
+    // replicate it onto the swapped-in KTX2 texture. THIS is the fix for the scramble.
+    const m=o.material && o.material.map;
+    if(m) rec.xform = { offset:m.offset.clone(), repeat:m.repeat.clone(), rotation:m.rotation, center:m.center.clone() };
+  }});
+  geoCache.set(file, rec); return rec;
+}
+function applyXform(tex, x){
+  if(!tex || !x) return;
+  tex.offset.copy(x.offset); tex.repeat.copy(x.repeat); tex.rotation = x.rotation; tex.center.copy(x.center);
+  tex.matrixAutoUpdate = true; tex.needsUpdate = true;
+}
+async function loadTexture(bandKey){
+  const url = A + (TEX[bandKey][ktxMode] || TEX[bandKey].etc1s);
+  if(texCache.has(url)) return texCache.get(url);
+  const t = await ktx2.loadAsync(url);
+  t.colorSpace = THREE.SRGBColorSpace; t.flipY = false;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  t.needsUpdate = true; texCache.set(url,t); return t;
+}
+function makeMaterial(tex){
+  if(normalsMode==='none') return new THREE.MeshBasicMaterial({ map:tex });      // unlit: ignores normals
+  return new THREE.MeshStandardMaterial({ map:tex, roughness:1, metalness:0 });   // lit: needs normals
+}
+function ensureNormals(geom){
+  if(normalsMode==='computed' && !geom.getAttribute('normal')) geom.computeVertexNormals();
+}
+function snapCam(){ return { p:camera.position.clone(), q:camera.quaternion.clone(), t:controls.target.clone() }; }
+function assertCam(before, label){
+  const a=snapCam();
+  const same = a.p.equals(before.p) && a.q.equals(before.q) && a.t.equals(before.t);
+  log(`${same?'✓':'✗'} camera preserved across ${label} — pos(${a.p.x.toFixed(2)},${a.p.y.toFixed(2)},${a.p.z.toFixed(2)}) target(${a.t.x.toFixed(2)},${a.t.y.toFixed(2)},${a.t.z.toFixed(2)})`, same?'ok':'err');
+}
+function fitOnce(obj){                 // frame the model the first time only (never on swaps)
+  const s = new THREE.Box3().setFromObject(obj).getBoundingSphere(new THREE.Sphere());
+  controls.target.copy(s.center); camera.position.copy(s.center).add(new THREE.Vector3(0,0,s.radius*2.6));
+  camera.near=s.radius/100; camera.far=s.radius*100; camera.updateProjectionMatrix(); controls.update();
+}
+
+async function show(geoKey, bandKey, {frame=false}={}){
+  const [rec, tex] = await Promise.all([loadGeometry(geoKey), loadTexture(bandKey)]);
+  const geom = rec.geom;
+  ensureNormals(geom);
+  applyXform(tex, rec.xform);
+  if(current){ scene.remove(current.mesh); current.mesh.material.dispose(); }
+  const mesh = new THREE.Mesh(geom, makeMaterial(tex));
+  if(rec.matrix){ mesh.applyMatrix4(rec.matrix); mesh.updateMatrixWorld(true); }  // node transform on the MESH
+  scene.add(mesh); current = { mesh, geoKey, bandKey, xform: rec.xform };
+  if(frame) fitOnce(mesh);
+}
+
+// ---- actions ----
+document.getElementById('btnTexSwap').onclick = async () => {
+  if(!current || !current.geoKey.startsWith('5')){ await show('5','5_rgb',{frame:true}); log('loaded band 5 (RGB) — now click again to swap texture','dim'); return; }
+  const before = snapCam();
+  const next = current.bandKey==='5_rgb' ? '5_ir1050' : '5_rgb';
+  const tex = await loadTexture(next);         // SAME geometry, swap only material.map
+  applyXform(tex, current.xform);              // preserve the geometry's UV transform
+  current.mesh.material.map = tex; current.mesh.material.needsUpdate = true; current.bandKey = next;
+  assertCam(before, `texture-only swap → ${next}`);
+};
+document.getElementById('btnMeshSwap').onclick = async () => {
+  if(!current || (current.geoKey!=='2' && current.geoKey!=='4')){ await show('2','2',{frame:true}); log('loaded band 2 — click again to swap mesh→4','dim'); return; }
+  const before = snapCam();
+  const next = current.geoKey==='2' ? '4' : '2';
+  await show(next, next);                       // DIFFERENT geometry + texture; camera/controls untouched
+  assertCam(before, `mesh swap → band ${next}`);
+};
+document.getElementById('btnKtxMode').onclick = async (e) => {
+  ktxMode = ktxMode==='etc1s' ? 'uastc' : 'etc1s';
+  e.target.textContent = 'KTX2 mode: '+ktxMode.toUpperCase();
+  if(current){
+    const has = !!TEX[current.bandKey][ktxMode];
+    if(!has) log(`band ${current.bandKey} has no ${ktxMode.toUpperCase()} variant — still showing ETC1S`,'warn');
+    const t=await loadTexture(current.bandKey); applyXform(t, current.xform); current.mesh.material.map=t; current.mesh.material.needsUpdate=true;
+    log('KTX2 now: '+(TEX[current.bandKey][ktxMode]||TEX[current.bandKey].etc1s),'dim');
+  }
+};
+document.getElementById('btnNormals').onclick = async (e) => {
+  normalsMode = normalsMode==='computed' ? 'none' : 'computed';
+  e.target.textContent = 'Normals: '+normalsMode;
+  if(current){ const t=current.mesh.material.map; ensureNormals(current.mesh.geometry);
+    current.mesh.material.dispose(); current.mesh.material=makeMaterial(t);
+    log(normalsMode==='computed'?'computeVertexNormals() + lit material':'unlit MeshBasicMaterial (no normals)','warn'); }
+};
+document.getElementById('btnDecim').onclick = async (e) => {
+  const i = DECIM_LEVELS.indexOf(decim); decim = DECIM_LEVELS[(i+1)%DECIM_LEVELS.length];
+  const pct = {full:'100%',r50:'50%',r20:'20%',r10:'10%'}[decim];
+  e.target.textContent = `Decimation: ${decim} (${pct}) — click to cycle`;
+  if(current){ const b=current.bandKey, g=current.geoKey; await show(g, b, {frame:false}); log(`reloaded ${g} at decimation ${decim} (${pct}) — check texture coherence`,'warn'); }
+};
+let refGroup = new THREE.Group(); scene.add(refGroup);
+async function loadReference(file, label){
+  if(current){ scene.remove(current.mesh); current=null; }
+  while(refGroup.children.length) refGroup.remove(refGroup.children[0]);
+  const g = await gltf.loadAsync(A+file);
+  let box=new THREE.Box3();
+  g.scene.traverse(o=>{ if(o.isMesh){
+    const map=o.material.map; if(map) map.colorSpace=THREE.SRGBColorSpace;
+    o.material = new THREE.MeshBasicMaterial({ map, color:0xffffff });   // unlit: pure texture, no normals
+    box.expandByObject(o);
+  }});
+  refGroup.add(g.scene);
+  const s=box.getBoundingSphere(new THREE.Sphere());
+  controls.target.copy(s.center); camera.position.copy(s.center).add(new THREE.Vector3(0,0,s.radius*2.6));
+  camera.near=s.radius/100; camera.far=s.radius*100; camera.updateProjectionMatrix(); controls.update();
+  log(`${label} — UNLIT, own embedded texture, normal GLTFLoader path`,'warn');
+}
+document.getElementById('btnRefO2g').onclick = ()=> loadReference('2_center_o2g.glb','REF obj2gltf (golden: no gltfpack)');
+document.getElementById('btnRefGp').onclick  = ()=> loadReference('2_center_withtex.glb','REF gltfpack+meshopt (texture used)');
+document.getElementById('btnUvDec').onclick = async () => { await show('2u','2',{frame:true}); log('band 2 @10% via MeshLab UV-aware decimation (with_texture) — should be COHERENT, unlike gltfpack -si','warn'); };
+document.getElementById('btnBakedA').onclick = async () => { normalsMode='computed'; document.getElementById('btnNormals').textContent='Normals: computed'; await show('5','5_rgb',{frame:true}); log('A: computeVertexNormals() on decimated geom — watch UV-seam islands for shading breaks','warn'); };
+document.getElementById('btnBakedB').onclick = async () => { normalsMode='computed'; await show('5b','5_rgb',{frame:true}); log('B: baked smooth normals (pipeline: normals pre-split, carried through gltfpack) — seams should be gone','warn'); };
+document.getElementById('btnAll').onclick = async () => {
+  log('loading ALL bands into memory at their REAL registered positions…','dim');
+  if(current){ scene.remove(current.mesh); current=null; }
+  const bands=[['5','5_rgb'],['5','5_ir1050'],['2','2'],['4','4']];
+  const meshes=[];
+  for(const [g,b] of bands){
+    const rec=await loadGeometry(g); ensureNormals(rec.geom);
+    const tex=await loadTexture(b); applyXform(tex, rec.xform);
+    const m=new THREE.Mesh(rec.geom, makeMaterial(tex));
+    if(rec.matrix){ m.applyMatrix4(rec.matrix); }        // real registered position via node transform
+    meshes.push(m); scene.add(m);
+    renderer.render(scene,camera);               // force GPU upload now
+    reportMem(`after ${b}`);
+  }
+  log('all bands resident at real positions — should register (overlap); confirm no OOM','ok');
+};
+document.getElementById('btnMeasure').onclick = (e)=>{ measure=!measure; e.target.classList.toggle('on',measure); e.target.textContent='Measure mode: '+(measure?'ON (click 2 pts)':'OFF'); picks.length=0; };
+document.getElementById('btnReset').onclick = async ()=>{ ktxMode='etc1s'; await show('5','5_rgb',{frame:true}); reportMem('band 5'); };
+
+renderer.domElement.addEventListener('pointerdown', (ev)=>{
+  if(!measure || !current) return;
+  const r=renderer.domElement.getBoundingClientRect();
+  const ndc=new THREE.Vector2(((ev.clientX-r.left)/r.width)*2-1, -((ev.clientY-r.top)/r.height)*2+1);
+  const rc=new THREE.Raycaster(); rc.setFromCamera(ndc,camera);
+  const hit=rc.intersectObject(current.mesh)[0]; if(!hit) return;
+  picks.push(hit.point.clone());
+  const s=new THREE.Mesh(new THREE.SphereGeometry(0.3,16,16), new THREE.MeshBasicMaterial({color:0xffcc33})); s.position.copy(hit.point); measureGroup.add(s);
+  if(picks.length===2){
+    const d=picks[0].distanceTo(picks[1]);
+    measureGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(picks), new THREE.LineBasicMaterial({color:0xffcc33})));
+    log(`distance = ${d.toFixed(3)} source units (real scale after node-transform bake; confirm mm vs cm)`, 'ok');
+    picks.length=0;
+  }
+});
+
+function reportMem(tag){
+  const i=renderer.info;
+  let s=`mem[${tag}] geometries=${i.memory.geometries} textures=${i.memory.textures} calls=${i.render.calls} tris=${i.render.triangles}`;
+  if(performance.memory) s+=` | jsHeap=${(performance.memory.usedJSHeapSize/1048576|0)}MB`;
+  if(navigator.deviceMemory) s+=` | deviceMem≈${navigator.deviceMemory}GB`;
+  log(s,'dim');
+}
+
+// ---- boot ----
+log('=== SPIKE BUILD v8 — default decim='+decim+' ===','ok');
+log('renderer: '+renderer.getContext().getParameter(renderer.getContext().VERSION),'dim');
+show('5','5_rgb',{frame:true}).then(()=>{ log('band 5 (RGB) loaded — no normals in source; using '+normalsMode,'ok'); reportMem('band 5'); })
+  .catch(e=>log('load error: '+e.message,'err'));
+</script>
+</body>
+</html>
