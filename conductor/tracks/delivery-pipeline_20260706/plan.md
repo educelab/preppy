@@ -29,7 +29,7 @@ self-contained glb.
 ### Tasks
 - [x] Task 1.1: Add `ktx`(≥v5)/`gltfpack`/`gltf-transform` PATH detection (mirror
       the existing `platform.system()` `.cmd` handling); document install.
-- [ ] Task 1.2: Bump Python floor to 3.11+, refresh deps; add optional
+- [x] Task 1.2: Bump Python floor to 3.11+, refresh deps; add optional
       `pymeshlab`. Update `setup.cfg`, `requirements.txt`, Singularity def.
 - [ ] Task 1.3: Mark `obj2gltf`/`gltf-pipeline` path deprecated (keep old
       entrypoint working until the new one lands).
