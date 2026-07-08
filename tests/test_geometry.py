@@ -32,6 +32,13 @@ def test_geometry_cmd_validation_variant():
     assert cmd[-1] == '-kn'
 
 
+def test_geometry_cmd_no_decimate_omits_si():
+    cmd = geometry.obj_to_geometry_glb_cmd(
+        Path('m.obj'), Path('g.glb'), target_error=None)
+    assert '-si' not in cmd      # --no-decimate: no simplification
+    assert '-cc' in cmd          # still meshopt-compressed
+
+
 def test_hausdorff_result_budget():
     r = HausdorffResult(max_distance=0.03, mean=0.001, rms=0.002,
                         bbox_diagonal=3.0, budget=0.05)

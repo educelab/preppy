@@ -156,6 +156,7 @@ def process_object(object_cfg: Mapping, *, config_dir: Path, out_dir: Path,
         progress.reset(len(variants))
 
     entries = []
+    asset_names = []
     for i, variant in enumerate(variants):
         if progress is not None:
             progress.set_description_str(variant.get('label', variant['suffix']))
@@ -164,11 +165,17 @@ def process_object(object_cfg: Mapping, *, config_dir: Path, out_dir: Path,
             obj_out_dir=obj_out_dir, tmp_dir=obj_tmp, opts=opts)
         entries.append(manifest.variant_entry(
             variant, result['uri'], default=(i == default_idx)))
+        asset_names.append(result['name'])
         if progress is not None:
             progress.update()
 
     man = manifest.build_manifest(object_cfg, entries)
     manifest.write_json(man, obj_out_dir / 'manifest.json')
+
+    if opts.prune:
+        removed = cache.prune(obj_out_dir, keep=asset_names)
+        if removed:
+            print(f'  pruned {len(removed)} stale asset(s) from {prefix}/')
 
     return manifest.index_entry(
         object_id, man.get('title', object_id),
@@ -184,6 +191,25 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument('-o', '--output', type=str, metavar='DIR',
                         default='out', help='Output directory (default: out/)')
 
+    tex_opts = parser.add_argument_group('texture options')
+    tex_opts.add_argument('--ktx2-mode', choices=['etc1s', 'uastc'],
+                          default='etc1s',
+                          help='KTX2/Basis codec (default: etc1s)')
+    tex_opts.add_argument('-d', '--max-dim', type=int, default=8192,
+                          metavar='INT',
+                          help='Downsize textures larger than this (default: 8192)')
+    tex_opts.add_argument('--nodata-fill', default=None, metavar='COLOR',
+                          help='Default atlas no-data fill color to dilate over '
+                               '(overridden per object/variant by nodataFill)')
+
+    geo_opts = parser.add_argument_group('geometry options')
+    geo_opts.add_argument('-s', '--decimate-error', type=float,
+                          default=DEFAULT_TARGET_ERROR, metavar='FLOAT',
+                          help='gltfpack -si error-bounded simplification target '
+                               f'(default: {DEFAULT_TARGET_ERROR})')
+    geo_opts.add_argument('--no-decimate', action='store_true',
+                          help='Meshopt-compress without simplifying (skip -si)')
+
     out_opts = parser.add_argument_group('output options')
     out_opts.add_argument('--hash-names', default=True,
                           action=argparse.BooleanOptionalAction,
@@ -192,8 +218,15 @@ def _build_parser() -> argparse.ArgumentParser:
     out_opts.add_argument('--uri', default='',
                           help='URI prefix prepended to each variant glb name in '
                                'the manifest (default: relative, within folder)')
+    out_opts.add_argument('--prune', action='store_true',
+                          help='After writing, delete hashed asset files in each '
+                               'object folder no longer referenced by its manifest')
 
     adv_opts = parser.add_argument_group('advanced options')
+    adv_opts.add_argument('--opaque', default=True,
+                          action=argparse.BooleanOptionalAction,
+                          help='Force alphaMode=OPAQUE on textured materials '
+                               '(defensive fix for OpenMVS Tr 1.0). Default: on.')
     adv_opts.add_argument('--keep-tmp', default=False,
                           action=argparse.BooleanOptionalAction,
                           help='Keep the temporary files directory')
@@ -201,13 +234,9 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _fill_defaults(args: argparse.Namespace) -> argparse.Namespace:
-    """Set the Phase-4 CLI knobs to validated defaults (flags land in Task 4.2)."""
-    args.ktx2_mode = getattr(args, 'ktx2_mode', 'etc1s')
-    args.target_error = getattr(args, 'target_error', DEFAULT_TARGET_ERROR)
-    args.max_dim = getattr(args, 'max_dim', 8192)
-    args.nodata_fill = getattr(args, 'nodata_fill', None)
-    args.opaque = getattr(args, 'opaque', True)
+def _normalize_args(args: argparse.Namespace) -> argparse.Namespace:
+    """Map raw CLI names to the knobs the processing code reads."""
+    args.target_error = None if args.no_decimate else args.decimate_error
     # Normalize --uri to end in a separator when non-empty.
     if args.uri and not args.uri.endswith('/'):
         args.uri += '/'
@@ -215,7 +244,7 @@ def _fill_defaults(args: argparse.Namespace) -> argparse.Namespace:
 
 
 def main():
-    args = _fill_defaults(_build_parser().parse_args())
+    args = _normalize_args(_build_parser().parse_args())
 
     config_path = Path(args.input)
     print('Loading input config...')

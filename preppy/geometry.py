@@ -30,12 +30,14 @@ DEFAULT_TARGET_ERROR = 0.2
 
 
 def obj_to_geometry_glb_cmd(obj: Path, out: Path,
-                            target_error: float = DEFAULT_TARGET_ERROR,
+                            target_error: Optional[float] = DEFAULT_TARGET_ERROR,
                             meshopt: bool = True, quantize: bool = True,
                             extra: Optional[List[str]] = None) -> List[str]:
     """Build the ``gltfpack`` argv for OBJ -> geometry glb.
 
-    - ``-si <target_error>`` — error-bounded simplification.
+    - ``-si <target_error>`` — error-bounded simplification. ``target_error=None``
+      omits ``-si`` entirely (``--no-decimate``: meshopt-compress without
+      simplifying).
     - ``-cc`` — meshopt compression (delivery build). Disable (``meshopt=False``)
       to get a mesh that pymeshlab can read for :func:`validate`.
     - ``-noq`` — disable vertex quantization when ``quantize`` is False (also
@@ -44,8 +46,9 @@ def obj_to_geometry_glb_cmd(obj: Path, out: Path,
     Normals are never generated here; the viewer computes them.
     """
     cmd: List[str] = [tools.TOOLS['gltfpack'].executable,
-                      '-i', str(obj), '-o', str(out),
-                      '-si', str(target_error)]
+                      '-i', str(obj), '-o', str(out)]
+    if target_error is not None:
+        cmd += ['-si', str(target_error)]
     if meshopt:
         cmd.append('-cc')
     if not quantize:
@@ -56,7 +59,7 @@ def obj_to_geometry_glb_cmd(obj: Path, out: Path,
 
 
 def obj_to_geometry_glb(obj: PathLike, out: PathLike, *,
-                        target_error: float = DEFAULT_TARGET_ERROR,
+                        target_error: Optional[float] = DEFAULT_TARGET_ERROR,
                         meshopt: bool = True, quantize: bool = True,
                         extra: Optional[List[str]] = None) -> Path:
     """Run gltfpack to produce the decimated geometry glb; return its path."""
