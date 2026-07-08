@@ -45,7 +45,7 @@ self-contained glb.
 - [x] Task 2.2: `geometry.py` — `obj_to_geometry_glb()` (gltfpack geometry+UV,
       `-si 0.2`, `-cc`, UVs kept "used"; **no** normal bake) + `validate()`
       Hausdorff vs budget.
-- [ ] Task 2.3: `assemble.py` — `embed(geom_glb, ktx2s)` via gltf-transform
+- [x] Task 2.3: `assemble.py` — `embed(geom_glb, ktx2s)` via gltf-transform
       (`KHR_texture_basisu`), preserving meshopt + `KHR_texture_transform`.
 - [ ] Task 2.4: Content-hash helper (input+config SHA-256, 8 hex) + `--prune`.
 ### Verification
