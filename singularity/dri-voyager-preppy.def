@@ -29,8 +29,20 @@ From: python:3.11-slim
       nodejs
   node -v
 
-  # Install the other deps using node
-  npm install -g obj2gltf gltf-pipeline
+  # Install KTX-Software (>= v5, provides `ktx create`). toktx was removed in v5.
+  # Pin a v5 release .deb; update KTX_VERSION / asset name from
+  # https://github.com/KhronosGroup/KTX-Software/releases as needed.
+  KTX_VERSION=5.0.0
+  curl -fsSL -o /tmp/ktx.deb \
+      "https://github.com/KhronosGroup/KTX-Software/releases/download/v${KTX_VERSION}/KTX-Software-${KTX_VERSION}-Linux-x86_64.deb"
+  DEBIAN_FRONTEND=noninteractive apt install -y /tmp/ktx.deb
+  rm -f /tmp/ktx.deb
+  ktx --version
+
+  # Install the node-based tools.
+  # New delivery toolchain: gltfpack (geometry) + gltf-transform (KTX2 embed).
+  # obj2gltf/gltf-pipeline are the deprecated legacy path, kept until it is removed.
+  npm install -g gltfpack @gltf-transform/cli obj2gltf gltf-pipeline
 
   # Create a venv for this project
   python3 -m venv /usr/local/educelab/dri-voyager-preppy/.venv/
