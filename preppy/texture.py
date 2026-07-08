@@ -88,6 +88,28 @@ def encode_ktx2_cmd(png: Path, dst: Path, mode: str = 'etc1s',
     return cmd
 
 
+def thumbnail_cmd(src: Path, dst: Path, size: int = 512) -> List[str]:
+    """Build the ``magick`` argv for a square, center-cropped thumbnail.
+
+    ``-resize {size}x{size}^`` fills the box (shortest side = ``size``), then
+    ``-gravity center -extent`` crops to a centered square. Cheap, no offscreen
+    GL (A5 — thumbnails come from the default variant's normalized texture).
+    """
+    return ['magick', str(src),
+            '-resize', f'{size}x{size}^',
+            '-gravity', 'center', '-extent', f'{size}x{size}',
+            str(dst)]
+
+
+def thumbnail(src: PathLike, dst: PathLike, *, size: int = 512) -> Path:
+    """Write a square center-cropped thumbnail of ``src`` to ``dst``; return it."""
+    tools.require('magick')
+    src, dst = Path(src), Path(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    sp.run(thumbnail_cmd(src, dst, size=size), check=True)
+    return dst
+
+
 def normalize(src: PathLike, dst: Optional[PathLike] = None, *,
               tmp_dir: Optional[PathLike] = None, max_dim: int = 8192,
               nodata_fill: Optional[str] = None, fuzz: str = '5%',

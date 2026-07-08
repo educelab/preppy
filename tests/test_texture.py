@@ -10,6 +10,14 @@ import pytest
 from preppy import texture
 
 
+def test_thumbnail_cmd_square_center_crop():
+    cmd = texture.thumbnail_cmd(Path('a.png'), Path('t.jpg'), size=256)
+    assert cmd[0] == 'magick' and cmd[1] == 'a.png' and cmd[-1] == 't.jpg'
+    assert cmd[cmd.index('-resize') + 1] == '256x256^'   # fill the box
+    assert cmd[cmd.index('-gravity') + 1] == 'center'
+    assert cmd[cmd.index('-extent') + 1] == '256x256'    # crop to square
+
+
 def test_normalize_cmd_plain_no_dilation():
     cmd = texture.normalize_cmd(Path('in.tif'), Path('out.png'), max_dim=8192)
     assert cmd[0] == 'magick' and cmd[1] == 'in.tif' and cmd[-1] == 'out.png'

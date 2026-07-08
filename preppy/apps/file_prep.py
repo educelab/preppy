@@ -107,11 +107,15 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
 
     nodata = resolve_nodata_fill(variant, object_cfg, opts.nodata_fill)
 
-    # 2. Per texture: normalize -> KTX2.
+    # 2. Per texture: normalize -> KTX2. Keep the first normalized PNG as the
+    #    thumbnail source (used only if this is the default variant).
     ktx2_by_material: Dict[str, Path] = {}
+    thumb_src: Optional[Path] = None
     for name, img in ktx2_textures.items():
         png = texture.normalize(img, tmp_dir=var_tmp, max_dim=opts.max_dim,
                                 nodata_fill=nodata)
+        if thumb_src is None:
+            thumb_src = png
         ktx2_by_material[name] = texture.encode_ktx2(
             png, dst=var_tmp / f'{name}.ktx2', mode=opts.ktx2_mode)
 
@@ -133,7 +137,8 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     # 5. Embed KTX2 (by name) -> one self-contained variant glb.
     assemble.embed(geom, ktx2_by_material, obj_out_dir / name, opaque=opts.opaque)
 
-    return {'suffix': suffix, 'name': name, 'uri': f'{opts.uri}{name}'}
+    return {'suffix': suffix, 'name': name, 'uri': f'{opts.uri}{name}',
+            'thumb_src': thumb_src}
 
 
 def process_object(object_cfg: Mapping, *, config_dir: Path, out_dir: Path,
@@ -157,6 +162,7 @@ def process_object(object_cfg: Mapping, *, config_dir: Path, out_dir: Path,
 
     entries = []
     asset_names = []
+    default_thumb_src = None
     for i, variant in enumerate(variants):
         if progress is not None:
             progress.set_description_str(variant.get('label', variant['suffix']))
@@ -166,11 +172,22 @@ def process_object(object_cfg: Mapping, *, config_dir: Path, out_dir: Path,
         entries.append(manifest.variant_entry(
             variant, result['uri'], default=(i == default_idx)))
         asset_names.append(result['name'])
+        if i == default_idx:
+            default_thumb_src = result['thumb_src']
         if progress is not None:
             progress.update()
 
     man = manifest.build_manifest(object_cfg, entries)
     manifest.write_json(man, obj_out_dir / 'manifest.json')
+
+    # Thumbnail: a downscaled center-crop of the default variant's texture (A5).
+    thumb_rel = None
+    if opts.thumbnails and default_thumb_src is not None:
+        thumb_name = f'{prefix}_thumb.jpg'
+        texture.thumbnail(default_thumb_src, obj_out_dir / thumb_name,
+                          size=opts.thumbnail_size)
+        thumb_rel = f'{prefix}/{thumb_name}'
+        asset_names.append(thumb_name)
 
     if opts.prune:
         removed = cache.prune(obj_out_dir, keep=asset_names)
@@ -179,7 +196,7 @@ def process_object(object_cfg: Mapping, *, config_dir: Path, out_dir: Path,
 
     return manifest.index_entry(
         object_id, man.get('title', object_id),
-        manifest_uri=f'{prefix}/manifest.json')
+        manifest_uri=f'{prefix}/manifest.json', thumb=thumb_rel)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -221,6 +238,13 @@ def _build_parser() -> argparse.ArgumentParser:
     out_opts.add_argument('--prune', action='store_true',
                           help='After writing, delete hashed asset files in each '
                                'object folder no longer referenced by its manifest')
+    out_opts.add_argument('--thumbnails', default=True,
+                          action=argparse.BooleanOptionalAction,
+                          help='Emit a <prefix>_thumb.jpg per object (cropped '
+                               'from the default variant texture). Default: on.')
+    out_opts.add_argument('--thumbnail-size', type=int, default=512,
+                          metavar='INT',
+                          help='Square thumbnail edge in px (default: 512)')
 
     adv_opts = parser.add_argument_group('advanced options')
     adv_opts.add_argument('--opaque', default=True,
