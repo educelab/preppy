@@ -55,6 +55,13 @@ full schema and [`templates/mvs-example.json`](templates/mvs-example.json) for a
 worked example. Each variant's texture(s) are resolved transitively from its
 OBJ's `map_Kd` — no texture paths in the config normally.
 
+Relative `obj` paths resolve against `--data-root` (default: the current working
+directory), so the config file can live anywhere:
+
+```shell
+voyager-preppy -i config.json -o out/ --data-root /path/to/meshes/
+```
+
 Output layout (per-object directory named by `prefix`, defaults to `id`):
 
 ```
@@ -77,6 +84,7 @@ current hashed URIs. Useful flags:
 | `--no-decimate` | meshopt-compress without simplifying |
 | `--nodata-fill COLOR` | default atlas no-data fill to dilate over |
 | `--no-hash-names` | stable asset names (not cacheable `immutable`) |
+| `--data-root DIR` | root that relative `obj` paths resolve against (default: CWD) |
 | `--uri PREFIX` | absolute-URL prefix for manifest `uri`s |
 | `--prune` | delete hashed assets no longer referenced by a manifest |
 | `--keep-tmp` | keep intermediate PNG/KTX2/geometry files |

@@ -53,7 +53,7 @@ Console entrypoints in `preppy/apps/` are thin argparse CLIs over the library mo
 The `voyager-preppy` input JSON is a flat array of **objects**, validated by `templates/prep-models.schema.json` (examples: `prep-models-example.json`, `mvs-example.json`):
 
 - An **object** needs `id`, `title`, and a `variants` array. Optional `prefix` (output folder/file prefix; defaults to `id`), `titles`, `inventory`, `description`, `credit`, `date`, `units` (default `cm`), `nodataFill`.
-- A **variant** needs `suffix` (stable key: names the file + is the manifest variant `id`) and `obj`. Optional `label`, `default`, `nodataFill` (resolved variant ?? object ?? CLI), `texture` override, and per-variant `credit`/`date`/`method`/`description`. Textures are otherwise resolved transitively from the OBJ's `map_Kd`.
+- A **variant** needs `suffix` (stable key: names the file + is the manifest variant `id`) and `obj`. Optional `label`, `default`, `nodataFill` (resolved variant ?? object ?? CLI), `texture` override, and per-variant `credit`/`date`/`method`/`description`. Textures are otherwise resolved transitively from the OBJ's `map_Kd`. Relative `obj` paths resolve against `--data-root` (default CWD), not the config file's location.
 
 ### Output layout
 

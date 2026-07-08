@@ -13,11 +13,25 @@ from preppy.geometry import HausdorffResult
 
 
 def test_resolve_obj_path_absolute_and_relative(tmp_path):
-    cfg_dir = tmp_path / 'cfg'
+    data_root = tmp_path / 'root'
     abs_p = tmp_path / 'x.obj'
-    assert file_prep.resolve_obj_path(str(abs_p), cfg_dir) == abs_p
-    rel = file_prep.resolve_obj_path('sub/y.obj', cfg_dir)
-    assert rel == cfg_dir / 'sub' / 'y.obj'
+    assert file_prep.resolve_obj_path(str(abs_p), data_root) == abs_p
+    rel = file_prep.resolve_obj_path('sub/y.obj', data_root)
+    assert rel == data_root / 'sub' / 'y.obj'
+
+
+def test_normalize_args_data_root_defaults_to_cwd():
+    ns = SimpleNamespace(data_root=None, no_decimate=False, decimate_error=0.2,
+                         uri='')
+    file_prep._normalize_args(ns)
+    assert ns.data_root == Path.cwd()
+
+
+def test_normalize_args_data_root_explicit_is_resolved(tmp_path):
+    ns = SimpleNamespace(data_root=str(tmp_path), no_decimate=False,
+                         decimate_error=0.2, uri='')
+    file_prep._normalize_args(ns)
+    assert ns.data_root == tmp_path.resolve()
 
 
 def test_resolve_nodata_fill_cascade():
@@ -73,7 +87,7 @@ def _run_variant(tmp_path, opts):
     (tmp_path / 'mesh.obj').write_text('mtllib x\n')
     return file_prep.process_variant(
         {'id': 'O'}, {'suffix': 'rgb', 'obj': 'mesh.obj'},
-        prefix='O', config_dir=tmp_path, obj_out_dir=tmp_path / 'out',
+        prefix='O', data_root=tmp_path, obj_out_dir=tmp_path / 'out',
         tmp_dir=tmp_path / 'tmp', opts=opts)
 
 

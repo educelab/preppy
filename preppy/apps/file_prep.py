@@ -51,10 +51,10 @@ def tool_versions() -> Dict[str, str]:
     return {n: st.version_str for n, st in statuses.items() if st.version_str}
 
 
-def resolve_obj_path(obj: str, config_dir: Path) -> Path:
-    """Resolve a config ``obj`` path (absolute, or relative to the config file)."""
+def resolve_obj_path(obj: str, data_root: Path) -> Path:
+    """Resolve a config ``obj`` path (absolute, or relative to ``data_root``)."""
     p = Path(obj)
-    return p if p.is_absolute() else (config_dir / p)
+    return p if p.is_absolute() else (data_root / p)
 
 
 def resolve_nodata_fill(variant: Mapping, object_cfg: Mapping,
@@ -81,7 +81,7 @@ def hash_inputs(obj_path: Path, textures: Mapping[str, Path]) -> List[Path]:
 
 
 def process_variant(object_cfg: Mapping, variant: Mapping, *,
-                    prefix: str, config_dir: Path, obj_out_dir: Path,
+                    prefix: str, data_root: Path, obj_out_dir: Path,
                     tmp_dir: Path, opts: argparse.Namespace) -> Dict:
     """Run the full chain for one variant; return ``{suffix, name, uri}``.
 
@@ -90,7 +90,7 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     by default).
     """
     suffix = variant['suffix']
-    obj_path = resolve_obj_path(variant['obj'], config_dir)
+    obj_path = resolve_obj_path(variant['obj'], data_root)
     if not obj_path.is_file():
         raise FileNotFoundError(f'variant {suffix!r}: OBJ not found: {obj_path}')
 
@@ -158,7 +158,7 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
             'thumb_src': thumb_src}
 
 
-def process_object(object_cfg: Mapping, *, config_dir: Path, out_dir: Path,
+def process_object(object_cfg: Mapping, *, data_root: Path, out_dir: Path,
                    tmp_dir: Path, opts: argparse.Namespace,
                    progress: Optional[tqdm] = None) -> Dict:
     """Process one object: emit its variant glbs + ``manifest.json``; return an
@@ -184,7 +184,7 @@ def process_object(object_cfg: Mapping, *, config_dir: Path, out_dir: Path,
         if progress is not None:
             progress.set_description_str(variant.get('label', variant['suffix']))
         result = process_variant(
-            object_cfg, variant, prefix=prefix, config_dir=config_dir,
+            object_cfg, variant, prefix=prefix, data_root=data_root,
             obj_out_dir=obj_out_dir, tmp_dir=obj_tmp, opts=opts)
         entries.append(manifest.variant_entry(
             variant, result['uri'], default=(i == default_idx)))
@@ -224,6 +224,9 @@ def _build_parser() -> argparse.ArgumentParser:
                         help='JSON config: array of objects, each with variants')
     parser.add_argument('-o', '--output', type=str, metavar='DIR',
                         default='out', help='Output directory (default: out/)')
+    parser.add_argument('--data-root', type=str, metavar='DIR', default=None,
+                        help='Root that relative obj paths resolve against '
+                             '(default: current working directory)')
 
     tex_opts = parser.add_argument_group('texture options')
     tex_opts.add_argument('--ktx2-mode', choices=['etc1s', 'uastc'],
@@ -285,6 +288,9 @@ def _build_parser() -> argparse.ArgumentParser:
 def _normalize_args(args: argparse.Namespace) -> argparse.Namespace:
     """Map raw CLI names to the knobs the processing code reads."""
     args.target_error = None if args.no_decimate else args.decimate_error
+    # Relative obj paths resolve against --data-root, defaulting to the CWD.
+    args.data_root = (Path(args.data_root).resolve() if args.data_root
+                      else Path.cwd())
     # Normalize --uri to end in a separator when non-empty.
     if args.uri and not args.uri.endswith('/'):
         args.uri += '/'
@@ -300,10 +306,10 @@ def main():
         config = json.load(f)
     if not isinstance(config, list):
         raise SystemExit('Input config must be a JSON array of objects.')
-    config_dir = config_path.resolve().parent
 
     num_variants = sum(len(o.get('variants') or []) for o in config)
     print(f'Loaded: {len(config)} object(s), {num_variants} variant(s)')
+    print(f'Resolving relative obj paths against {args.data_root}')
 
     out_dir = Path(args.output)
     tmp_dir = out_dir / 'tmp'
@@ -318,7 +324,7 @@ def main():
     for object_cfg in outer:
         outer.set_description_str(f'Object {object_cfg.get("id", "?")}')
         index_objects.append(process_object(
-            object_cfg, config_dir=config_dir, out_dir=out_dir,
+            object_cfg, data_root=args.data_root, out_dir=out_dir,
             tmp_dir=tmp_dir, opts=args, progress=inner))
     inner.close()
     outer.close()

@@ -95,7 +95,7 @@
           "type": "string"
         },
         "obj": {
-          "description": "Path to the variant's OBJ (absolute, or relative to this config file).",
+          "description": "Path to the variant's OBJ (absolute, or relative to --data-root, which defaults to the current working directory).",
           "type": "string"
         },
         "default": {

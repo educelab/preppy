@@ -82,8 +82,10 @@ def sample(tmp_path):
 
 
 def _run(config_path, out_dir, *extra):
+    # The sample's obj paths are relative to the config's dir, so point
+    # --data-root there (default is the CWD).
     argv = ['voyager-preppy', '-i', str(config_path), '-o', str(out_dir),
-            *extra]
+            '--data-root', str(config_path.parent), *extra]
     from preppy.apps import file_prep
     old = sys.argv
     sys.argv = argv
