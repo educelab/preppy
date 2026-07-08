@@ -27,7 +27,7 @@ self-contained glb.
 
 ## Phase 1: Dependencies & scaffolding (A0)
 ### Tasks
-- [ ] Task 1.1: Add `ktx`(≥v5)/`gltfpack`/`gltf-transform` PATH detection (mirror
+- [x] Task 1.1: Add `ktx`(≥v5)/`gltfpack`/`gltf-transform` PATH detection (mirror
       the existing `platform.system()` `.cmd` handling); document install.
 - [ ] Task 1.2: Bump Python floor to 3.11+, refresh deps; add optional
       `pymeshlab`. Update `setup.cfg`, `requirements.txt`, Singularity def.
