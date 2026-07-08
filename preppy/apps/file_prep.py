@@ -1,184 +1,255 @@
+"""``voyager-preppy`` — batch orchestrator for the delivery pipeline.
+
+For each object in the input config, and for **each variant independently** (no
+geometry grouping — ADR-0002 amended), run the validated chain:
+
+1. Resolve the variant's texture(s) transitively from its OBJ's ``map_Kd``
+   (``obj_helpers.parse_material_textures``) — one or many (multi-chart UV).
+2. Normalize each texture to 8-bit sRGB PNG (dilating over ``nodataFill`` when
+   resolved) and encode it to KTX2 (``texture``).
+3. gltfpack the OBJ to decimated, meshopt-compressed geometry (``geometry``).
+4. Embed every KTX2 into the geometry glb **by material name** -> one
+   self-contained variant glb (``assemble``).
+
+Then emit a per-object ``manifest.json`` (``manifest``) and, across objects, an
+optional top-level ``index.json``. Output layout::
+
+    out/
+      index.json                         # optional host archive listing
+      <prefix>/
+        manifest.json                    # variants[].uri = "<prefix>_<suffix>[.<hash>].glb"
+        <prefix>_<suffix>[.<hash>].glb   # one self-contained glb per variant
+
+Asset filenames carry an inputs+config content hash by default (``--hash-names``)
+so they can be served ``immutable``; ``manifest.json`` / ``index.json`` keep
+stable names and hold the current hashed URIs (``cache``).
+
+CLI flags for KTX2 mode, decimation error, no-data fill, and ``--prune`` land in
+Phase 4; this phase wires the output layout, hashing, and ``--uri`` prefixing and
+uses validated defaults for the rest.
+"""
+
 import argparse
 import json
 import shutil
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Mapping, Optional
 
-import PIL.Image
 from tqdm import tqdm
 
-import preppy.voyager as voyager
-from preppy.convert import obj_to_glb, prep_obj
+from preppy import assemble, cache, geometry, manifest, texture, tools
+from preppy.geometry import DEFAULT_TARGET_ERROR
+from preppy.obj_helpers import _mtllibs, parse_material_textures
+
+#: External tools whose versions are folded into the content hash.
+_HASH_TOOLS = ('magick', 'ktx', 'gltfpack', 'node')
 
 
-def generate_voyager_scene(model_data: Dict, uri: str, glb_path: Path) -> Dict:
+def tool_versions() -> Dict[str, str]:
+    """Version strings of the pipeline tools, for the content hash."""
+    statuses = tools.check_all(_HASH_TOOLS)
+    return {n: st.version_str for n, st in statuses.items() if st.version_str}
+
+
+def resolve_obj_path(obj: str, config_dir: Path) -> Path:
+    """Resolve a config ``obj`` path (absolute, or relative to the config file)."""
+    p = Path(obj)
+    return p if p.is_absolute() else (config_dir / p)
+
+
+def resolve_nodata_fill(variant: Mapping, object_cfg: Mapping,
+                        cli_default: Optional[str]) -> Optional[str]:
+    """No-data fill color, resolved *variant ?? object ?? CLI default*.
+
+    A key **present** on the variant wins even if its value is ``null`` (which
+    disables an inherited object/CLI default); absence falls through. Absent
+    everywhere -> ``None`` (no dilation).
     """
-    Generate a Voyager scene dictionary for the given model
-    Args:
-        model_data: Model's descriptive metadata dict from items.json file
-        uri: Root URI for the glb file (e.g. https://foo.com/data/)
-        glb_path: Path to the local glb file
+    if 'nodataFill' in variant:
+        return variant['nodataFill']
+    if 'nodataFill' in object_cfg:
+        return object_cfg['nodataFill']
+    return cli_default
 
-    Returns:
-        Voyager scene dictionary
+
+def hash_inputs(obj_path: Path, textures: Mapping[str, Path]) -> List[Path]:
+    """Files whose bytes define a variant's output: OBJ + its MTLs + textures."""
+    files = [obj_path]
+    files.extend(_mtllibs(obj_path))
+    files.extend(textures.values())
+    return files
+
+
+def process_variant(object_cfg: Mapping, variant: Mapping, *,
+                    prefix: str, config_dir: Path, obj_out_dir: Path,
+                    tmp_dir: Path, opts: argparse.Namespace) -> Dict:
+    """Run the full chain for one variant; return ``{suffix, name, uri}``.
+
+    ``name`` is the emitted glb basename (hashed unless ``--no-hash-names``);
+    ``uri`` is that name prefixed by ``--uri`` (relative within the object folder
+    by default).
     """
-    # Get a template scene
-    json_data = voyager.default_scene()
+    suffix = variant['suffix']
+    obj_path = resolve_obj_path(variant['obj'], config_dir)
+    if not obj_path.is_file():
+        raise FileNotFoundError(f'variant {suffix!r}: OBJ not found: {obj_path}')
 
-    # Voyager object name
-    json_data['nodes'][0]['name'] = model_data['stem']
+    var_tmp = tmp_dir / suffix
+    var_tmp.mkdir(parents=True, exist_ok=True)
 
-    # glb uri
-    glb_uri = f'{uri}{glb_path.name}'
-    json_data['models'][0]['derivatives'][0]['assets'][0]['uri'] = glb_uri
+    # 1. Resolve textures transitively (material name -> image), by name so the
+    #    embed matches gltfpack's declaration-ordered materials (F1).
+    ktx2_textures = parse_material_textures(obj_path)
+    if not ktx2_textures:
+        raise ValueError(
+            f'variant {suffix!r}: no textured materials (map_Kd) found in '
+            f'{obj_path}')
 
-    # Descriptive metadata
-    json_data['metas'][0]['collection']['title'] = model_data['title']
-    if 'titles' in model_data.keys():
-        json_data['metas'][0]['collection']['titles'] = model_data['titles']
+    nodata = resolve_nodata_fill(variant, object_cfg, opts.nodata_fill)
 
-    return json_data
+    # 2. Per texture: normalize -> KTX2.
+    ktx2_by_material: Dict[str, Path] = {}
+    for name, img in ktx2_textures.items():
+        png = texture.normalize(img, tmp_dir=var_tmp, max_dim=opts.max_dim,
+                                nodata_fill=nodata)
+        ktx2_by_material[name] = texture.encode_ktx2(
+            png, dst=var_tmp / f'{name}.ktx2', mode=opts.ktx2_mode)
 
+    # 3. gltfpack -> decimated meshopt geometry glb (UVs kept "used").
+    geom = geometry.obj_to_geometry_glb(
+        obj_path, var_tmp / 'geom.glb', target_error=opts.target_error)
 
-def process_model(model, out_dir, glb_dir, img_fmt, img_dim, tmp_dir, compress,
-                  uri, **kwargs):
-    # Get the input obj path
-    obj_path = Path(model['obj'])
+    # 4. Name the output asset (content hash over inputs+config, never output).
+    digest = None
+    if opts.hash_names:
+        config = {'target_error': opts.target_error, 'ktx2_mode': opts.ktx2_mode,
+                  'max_dim': opts.max_dim, 'nodata_fill': nodata,
+                  'opaque': opts.opaque}
+        digest = cache.content_hash(
+            hash_inputs(obj_path, ktx2_textures), config=config,
+            tool_versions=opts.tool_versions)
+    name = cache.hashed_name(prefix, suffix, digest)
 
-    # Construct a model stem from the object name
-    if 'stem' not in model.keys():
-        model['stem'] = obj_path.stem
+    # 5. Embed KTX2 (by name) -> one self-contained variant glb.
+    assemble.embed(geom, ktx2_by_material, obj_out_dir / name, opaque=opts.opaque)
 
-    # Prep the mesh for glb conversion
-    obj_path = prep_obj(obj_path=obj_path, img_fmt=img_fmt, img_dim=img_dim,
-                        tmp_dir=tmp_dir)
-
-    # Convert to glb
-    glb_path = glb_dir / f'{model["stem"]}.glb'
-    obj_to_glb(obj_path, glb_path, compress=compress)
-
-    # Write Voyager json for this model
-    json_data = generate_voyager_scene(model, uri, glb_path)
-    json_file = f'{model["stem"]}.svx.json'
-    json_path = out_dir / json_file
-    with json_path.open('w', encoding='utf8') as of:
-        json.dump(json_data, of, indent=4)
-
-    # Return the item
-    if 'navTitle' in model.keys():
-        title = model['navTitle']
-    else:
-        title = model['title']
-    return {'title': title, 'document': json_file}
+    return {'suffix': suffix, 'name': name, 'uri': f'{opts.uri}{name}'}
 
 
-def main():
+def process_object(object_cfg: Mapping, *, config_dir: Path, out_dir: Path,
+                   tmp_dir: Path, opts: argparse.Namespace,
+                   progress: Optional[tqdm] = None) -> Dict:
+    """Process one object: emit its variant glbs + ``manifest.json``; return an
+    ``index.json`` entry for it."""
+    object_id = object_cfg['id']
+    prefix = object_cfg.get('prefix', object_id)
+    variants = object_cfg.get('variants') or []
+    if not variants:
+        raise ValueError(f'object {object_id!r} declares no variants')
+
+    obj_out_dir = out_dir / prefix
+    obj_out_dir.mkdir(parents=True, exist_ok=True)
+    obj_tmp = tmp_dir / prefix
+
+    default_idx = manifest.default_variant_index(variants)
+    if progress is not None:
+        progress.reset(len(variants))
+
+    entries = []
+    for i, variant in enumerate(variants):
+        if progress is not None:
+            progress.set_description_str(variant.get('label', variant['suffix']))
+        result = process_variant(
+            object_cfg, variant, prefix=prefix, config_dir=config_dir,
+            obj_out_dir=obj_out_dir, tmp_dir=obj_tmp, opts=opts)
+        entries.append(manifest.variant_entry(
+            variant, result['uri'], default=(i == default_idx)))
+        if progress is not None:
+            progress.update()
+
+    man = manifest.build_manifest(object_cfg, entries)
+    manifest.write_json(man, obj_out_dir / 'manifest.json')
+
+    return manifest.index_entry(
+        object_id, man.get('title', object_id),
+        manifest_uri=f'{prefix}/manifest.json')
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='Prepare OBJ datasets for DRI Voyager.')
-    parser.add_argument('-i', '--input', type=str, metavar='FILE',
-                        help='JSON file containing batch metadata',
-                        required=True)
+        description='Prepare OBJ datasets for DRI Voyager: one self-contained '
+                    'glb per variant + a per-object manifest.')
+    parser.add_argument('-i', '--input', type=str, metavar='FILE', required=True,
+                        help='JSON config: array of objects, each with variants')
     parser.add_argument('-o', '--output', type=str, metavar='DIR',
-                        help='Output directory generated files',
-                        default='preppy/')
+                        default='out', help='Output directory (default: out/)')
 
-    glb_opts = parser.add_argument_group('glb options')
-    glb_opts.add_argument('-f', '--image-format', type=str.lower,
-                          help='Texture image encoding format',
-                          choices=['png', 'jpeg'],
-                          default='jpeg')
-    glb_opts.add_argument('-d', '--max-dim', default=8192, metavar='INT',
-                          help='Maximum image dimension for texture')
-    glb_opts.add_argument('--compress-draco', default=True,
+    out_opts = parser.add_argument_group('output options')
+    out_opts.add_argument('--hash-names', default=True,
                           action=argparse.BooleanOptionalAction,
-                          help='Apply Draco compression to the output glb')
-
-    meta_opts = parser.add_argument_group('metadata options')
-    meta_opts.add_argument('--uri',
-                           default='https://infoforest.cs.uky.edu/voyager/data/glb/',
-                           help='Root URI where models will be deployed (e.g. '
-                                'https://example.com/glb/)')
+                          help='Insert an inputs+config content hash into asset '
+                               'filenames (served immutable). Default: on.')
+    out_opts.add_argument('--uri', default='',
+                          help='URI prefix prepended to each variant glb name in '
+                               'the manifest (default: relative, within folder)')
 
     adv_opts = parser.add_argument_group('advanced options')
     adv_opts.add_argument('--keep-tmp', default=False,
                           action=argparse.BooleanOptionalAction,
                           help='Keep the temporary files directory')
 
-    args = parser.parse_args()
+    return parser
 
+
+def _fill_defaults(args: argparse.Namespace) -> argparse.Namespace:
+    """Set the Phase-4 CLI knobs to validated defaults (flags land in Task 4.2)."""
+    args.ktx2_mode = getattr(args, 'ktx2_mode', 'etc1s')
+    args.target_error = getattr(args, 'target_error', DEFAULT_TARGET_ERROR)
+    args.max_dim = getattr(args, 'max_dim', 8192)
+    args.nodata_fill = getattr(args, 'nodata_fill', None)
+    args.opaque = getattr(args, 'opaque', True)
+    # Normalize --uri to end in a separator when non-empty.
+    if args.uri and not args.uri.endswith('/'):
+        args.uri += '/'
+    return args
+
+
+def main():
+    args = _fill_defaults(_build_parser().parse_args())
+
+    config_path = Path(args.input)
     print('Loading input config...')
-    with Path(args.input).open() as f:
+    with config_path.open() as f:
         config = json.load(f)
-    num_groups = 0
-    num_models = 0
-    for m in config:
-        if 'documents' in m.keys():
-            num_groups += 1
-            num_models += len(m['documents'])
-        else:
-            num_models += 1
+    if not isinstance(config, list):
+        raise SystemExit('Input config must be a JSON array of objects.')
+    config_dir = config_path.resolve().parent
 
-    print(f'Loaded: {num_groups} group(s), {num_models} model(s)')
+    num_variants = sum(len(o.get('variants') or []) for o in config)
+    print(f'Loaded: {len(config)} object(s), {num_variants} variant(s)')
 
-    # Setup output directories
     out_dir = Path(args.output)
-    glb_dir = out_dir / 'glb'
     tmp_dir = out_dir / 'tmp'
-    for d in [out_dir, glb_dir]:
-        d.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Get the dataset uri
-    uri = args.uri
-    if uri[-1] != '/':
-        uri += '/'
+    # Tool versions are stable across the run; compute once for the hash.
+    args.tool_versions = tool_versions() if args.hash_names else {}
 
-    # Set Pillow to load large images
-    PIL.Image.MAX_IMAGE_PIXELS = 2000000000
+    index_objects = []
+    outer = tqdm(config, desc='Objects')
+    inner = tqdm(desc='Variants', leave=False)
+    for object_cfg in outer:
+        outer.set_description_str(f'Object {object_cfg.get("id", "?")}')
+        index_objects.append(process_object(
+            object_cfg, config_dir=config_dir, out_dir=out_dir,
+            tmp_dir=tmp_dir, opts=args, progress=inner))
+    inner.close()
+    outer.close()
 
-    # Save the kwargs in a useful form
-    kwargs = {
-        'out_dir': out_dir,
-        'glb_dir': glb_dir,
-        'img_fmt': args.image_format,
-        'img_dim': args.max_dim,
-        'tmp_dir': tmp_dir,
-        'compress': args.compress_draco,
-        'uri': uri
-    }
+    print('Writing index.json')
+    manifest.write_json(manifest.build_index(index_objects),
+                        out_dir / 'index.json')
 
-    # For every model
-    items = []
-    outer = tqdm(config)
-    inner = tqdm()
-    for model in outer:
-        # Handle grouped documents
-        if 'documents' in model.keys():
-            desc = f'Prepping group {model["title"]}'
-            outer.set_description_str(desc)
-            inner.reset(len(model['documents']))
-            sub_items = []
-            for sub_item in model['documents']:
-                desc = sub_item["title"].rjust(len(desc))
-                inner.set_description_str(desc)
-                sub_items.append(process_model(model=sub_item, **kwargs))
-                inner.update()
-            inner.refresh()
-            item = {'title': model['title'], 'subitems': sub_items}
-
-        # Handle single documents
-        else:
-            outer.set_description_str(f'Prepping model {model["title"]}')
-            item = process_model(model=model, **kwargs)
-        items.append(item)
-    del outer, inner
-
-    # Write items file
-    print('Writing items.json')
-    items_path = out_dir / 'items.json'
-    with Path(items_path).open('w', encoding='utf8') as of:
-        json.dump(items, of, indent=2)
-
-    # Delete temp files
     if not args.keep_tmp and tmp_dir.exists():
         print('Cleaning up')
         shutil.rmtree(tmp_dir)
