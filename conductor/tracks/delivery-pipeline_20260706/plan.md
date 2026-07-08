@@ -14,14 +14,16 @@ self-contained glb.
 
 ## Phase 0: Multi-material validation-first
 ### Tasks
-- [ ] Task 0.1: Take one real **multi-material** `mvs` OBJ (multiple `map_Kd`)
+- [x] Task 0.1: Take one real **multi-material** `mvs` OBJ (multiple `map_Kd`)
       through the full chain by hand: mogrify → `ktx create` (per texture) →
       gltfpack (`-si 0.2`, UVs "used", multi-primitive) → gltf-transform embed →
       load in a three.js check. Confirm coherent textures, preserved
-      `KHR_texture_transform`, correct scale.
+      `KHR_texture_transform`, correct scale. See [phase0-findings.md](./phase0-findings.md).
 ### Verification
-- [ ] A multi-texture variant glb renders correctly (no atlas scramble, right
+- [x] A multi-texture variant glb renders correctly (no atlas scramble, right
       scale). If not, resolve before building the batch pipeline.
+      **PASS** (operator-confirmed): texture mapping coherent; transparency fixed
+      upstream (F2); bleed = known nodata-dilation input (F4); mesh unscaled (F5).
 
 ## Phase 1: Dependencies & scaffolding (A0)
 ### Tasks

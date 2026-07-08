@@ -3,7 +3,7 @@
 | Status | Track ID | Title | Created | Updated |
 | ------ | -------- | ----- | ------- | ------- |
 | [x] | toolchain-spike_20260706 | Toolchain spike (de-risk the approach) | 2026-07-06 | 2026-07-07 |
-| [ ] | delivery-pipeline_20260706 | Delivery pipeline (meshopt geometry + KTX2 + manifest) | 2026-07-06 | 2026-07-06 |
+| [~] | delivery-pipeline_20260706 | Delivery pipeline (meshopt geometry + KTX2 + manifest) | 2026-07-06 | 2026-07-08 |
 | [ ] | viewer-widget_20260706 | `<dri-viewer>` web component | 2026-07-06 | 2026-07-06 |
 | [ ] | harden-migrate_20260706 | Harden & migrate | 2026-07-06 | 2026-07-06 |
 
