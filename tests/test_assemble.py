@@ -10,10 +10,10 @@ import pytest
 from preppy import assemble
 
 
-def test_embed_cmd_maps_by_name_and_opaque():
+def test_embed_cmd_maps_by_name():
     cmd = assemble.embed_cmd(
         'node', Path('geom.glb'), Path('out.glb'),
-        {'material_00': 'a.ktx2', 'material_01': Path('b.ktx2')}, opaque=True)
+        {'material_00': 'a.ktx2', 'material_01': Path('b.ktx2')})
     assert cmd[0] == 'node' and cmd[1] == str(assemble.EMBED_SCRIPT)
     assert cmd[cmd.index('--geom') + 1] == 'geom.glb'
     assert cmd[cmd.index('--out') + 1] == 'out.glb'
@@ -21,13 +21,6 @@ def test_embed_cmd_maps_by_name_and_opaque():
     maps = [cmd[i + 1] for i, a in enumerate(cmd) if a == '--map']
     assert 'material_00=a.ktx2' in maps
     assert 'material_01=b.ktx2' in maps
-    assert '--opaque' in cmd
-
-
-def test_embed_cmd_no_opaque():
-    cmd = assemble.embed_cmd('node', Path('g.glb'), Path('o.glb'),
-                             {'m': 'x.ktx2'}, opaque=False)
-    assert '--opaque' not in cmd
 
 
 def test_embed_rejects_empty_mapping(monkeypatch):

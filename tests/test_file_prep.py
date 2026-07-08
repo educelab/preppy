@@ -61,7 +61,7 @@ def test_hash_inputs_includes_obj_mtls_textures(tmp_path):
 def _stub_opts(**over):
     base = dict(max_dim=8192, nodata_fill=None, target_error=0.2, validate=True,
                 deviation_budget=0.05, ktx2_mode='etc1s', hash_names=False,
-                tool_versions={}, opaque=True, uri='')
+                tool_versions={}, uri='')
     base.update(over)
     return SimpleNamespace(**base)
 

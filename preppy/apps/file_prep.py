@@ -144,15 +144,14 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     digest = None
     if opts.hash_names:
         config = {'target_error': opts.target_error, 'ktx2_mode': opts.ktx2_mode,
-                  'max_dim': opts.max_dim, 'nodata_fill': nodata,
-                  'opaque': opts.opaque}
+                  'max_dim': opts.max_dim, 'nodata_fill': nodata}
         digest = cache.content_hash(
             hash_inputs(obj_path, ktx2_textures), config=config,
             tool_versions=opts.tool_versions)
     name = cache.hashed_name(prefix, suffix, digest)
 
     # 5. Embed KTX2 (by name) -> one self-contained variant glb.
-    assemble.embed(geom, ktx2_by_material, obj_out_dir / name, opaque=opts.opaque)
+    assemble.embed(geom, ktx2_by_material, obj_out_dir / name)
 
     return {'suffix': suffix, 'name': name, 'uri': f'{opts.uri}{name}',
             'thumb_src': thumb_src}
@@ -274,10 +273,6 @@ def _build_parser() -> argparse.ArgumentParser:
                           help='Square thumbnail edge in px (default: 512)')
 
     adv_opts = parser.add_argument_group('advanced options')
-    adv_opts.add_argument('--opaque', default=True,
-                          action=argparse.BooleanOptionalAction,
-                          help='Force alphaMode=OPAQUE on textured materials '
-                               '(defensive fix for OpenMVS Tr 1.0). Default: on.')
     adv_opts.add_argument('--keep-tmp', default=False,
                           action=argparse.BooleanOptionalAction,
                           help='Keep the temporary files directory')

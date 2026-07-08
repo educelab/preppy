@@ -46,26 +46,21 @@ def _require_node() -> str:
 
 
 def embed_cmd(node: str, geom_glb: Path, out_glb: Path,
-              ktx2_by_material: Mapping[str, PathLike],
-              opaque: bool = True) -> List[str]:
+              ktx2_by_material: Mapping[str, PathLike]) -> List[str]:
     """Build the ``node embed.mjs`` argv (pure; unit tested)."""
     cmd: List[str] = [node, str(EMBED_SCRIPT),
                       '--geom', str(geom_glb), '--out', str(out_glb)]
     for name, ktx2 in ktx2_by_material.items():
         cmd += ['--map', f'{name}={Path(ktx2)}']
-    if opaque:
-        cmd.append('--opaque')
     return cmd
 
 
 def embed(geom_glb: PathLike, ktx2_by_material: Mapping[str, PathLike],
-          out_glb: PathLike, *, opaque: bool = True) -> Path:
+          out_glb: PathLike) -> Path:
     """Embed each material's KTX2 into ``geom_glb`` -> a self-contained variant
     glb at ``out_glb``; return that path.
 
     ``ktx2_by_material`` maps each glb material **name** to its KTX2 file.
-    ``opaque`` forces OPAQUE alpha mode (defensive fix for the OpenMVS ``Tr 1.0``
-    ambiguity, F2); leave it on unless a variant legitimately has transparency.
     """
     node = _require_node()
     geom_glb, out_glb = Path(geom_glb), Path(out_glb)
@@ -73,6 +68,6 @@ def embed(geom_glb: PathLike, ktx2_by_material: Mapping[str, PathLike],
         raise ValueError('ktx2_by_material must map at least one material name')
     out_glb.parent.mkdir(parents=True, exist_ok=True)
 
-    cmd = embed_cmd(node, geom_glb, out_glb, ktx2_by_material, opaque=opaque)
+    cmd = embed_cmd(node, geom_glb, out_glb, ktx2_by_material)
     sp.run(cmd, check=True)
     return out_glb
