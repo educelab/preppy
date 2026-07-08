@@ -3,62 +3,120 @@
   "$id": "https://gitlab.com/educelab/dri-voyager-preppy/prep-models.schema.json",
 
   "title": "DRI Voyager Data Prep Input File",
-  "description": "An input file to the DRI voyager-preppy data preparation application",
+  "description": "Input to voyager-preppy: a flat array of objects, each declaring a flat variants[] (ADR-0002 amended — no geometry grouping). Each variant becomes one self-contained glb; each object gets one per-object manifest.",
 
   "type": "array",
-  "items": {
-    "anyOf": [{"$ref": "#/$defs/document"},{"$ref": "#/$defs/documentGroup"}]
-  },
-  "uniqueItems": true,
+  "items": { "$ref": "#/$defs/object" },
   "minItems": 1,
 
   "$defs": {
-    "document": {
-      "description": "Configuration for a single document",
+    "urlSafe": {
+      "type": "string",
+      "description": "URL-safe identifier used in filenames/URIs; case preserved as authored.",
+      "pattern": "^[A-Za-z0-9._-]+$",
+      "minLength": 1
+    },
+
+    "localizedString": {
+      "description": "A plain string, or a map of locale code to string.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "object", "additionalProperties": { "type": "string" }, "minProperties": 1 }
+      ]
+    },
+
+    "nodataFill": {
+      "description": "Atlas no-data fill color to edge-dilate over before KTX2 encoding (e.g. '#FF7F00'). null disables an inherited default; absent means no dilation. Resolved variant ?? object ?? CLI default.",
+      "type": ["string", "null"]
+    },
+
+    "object": {
+      "description": "One imaged object (one manifest / one scene).",
       "type": "object",
       "properties": {
-        "obj": {
-          "description": "Path to the input obj file",
-          "type": "string"
+        "id": {
+          "$ref": "#/$defs/urlSafe",
+          "description": "Stable object id; the manifest id and default output-folder/file prefix."
         },
-        "stem": {
-          "description": "Unique file stem (short name) to be used when referencing the current object",
-          "type": "string"
+        "prefix": {
+          "$ref": "#/$defs/urlSafe",
+          "description": "Optional output folder + filename prefix; defaults to id."
         },
         "title": {
-          "description": "Human-readable title for main UI (i.e. displayed in the model viewer)",
-          "type": "string"
-        },
-        "navTitle": {
-          "description": "Human-readable title for navigation UI (i.e. displayed in the navigation menu)",
+          "description": "Human-readable object title.",
           "type": "string"
         },
         "titles": {
+          "description": "Optional locale-specific display titles.",
           "type": "object",
-          "description": "Dictionary of locale-specific titles"
-        }
-      },
-      "required": ["obj", "stem", "title"]
-    },
-
-    "documentGroup": {
-      "description": "Named group of document configurations",
-      "type": "object",
-      "properties": {
-        "title": {
-          "description": "Human-readable title for the document group",
+          "additionalProperties": { "type": "string" },
+          "minProperties": 1
+        },
+        "inventory": {
+          "description": "Inventory / shelf number.",
           "type": "string"
         },
-        "documents": {
-          "description": "List of documents in the group",
+        "description": { "$ref": "#/$defs/localizedString" },
+        "credit": {
+          "description": "Credit / copyright line.",
+          "type": "string"
+        },
+        "date": {
+          "description": "Capture date (e.g. ISO 8601).",
+          "type": "string"
+        },
+        "units": {
+          "description": "Measurement units for the scene (default: cm).",
+          "type": "string",
+          "default": "cm"
+        },
+        "nodataFill": { "$ref": "#/$defs/nodataFill" },
+        "variants": {
+          "description": "Flat list of variants; each becomes one self-contained glb.",
           "type": "array",
-          "items": {
-            "$ref": "#/$defs/document"
-          },
+          "items": { "$ref": "#/$defs/variant" },
           "minItems": 1
         }
       },
-      "required": ["title", "documents"]
+      "required": ["id", "title", "variants"],
+      "additionalProperties": false
+    },
+
+    "variant": {
+      "description": "One mesh + its texture(s) for an object.",
+      "type": "object",
+      "properties": {
+        "suffix": {
+          "$ref": "#/$defs/urlSafe",
+          "description": "Stable variant key: names the file and is the manifest variant id (deep-link key)."
+        },
+        "label": {
+          "description": "Display-only variant label (falls back to suffix).",
+          "type": "string"
+        },
+        "obj": {
+          "description": "Path to the variant's OBJ (absolute, or relative to this config file).",
+          "type": "string"
+        },
+        "default": {
+          "description": "Marks the initial variant. Exactly one variant per object is the default (the first, if none set this).",
+          "type": "boolean"
+        },
+        "texture": {
+          "description": "Optional texture override(s); by default textures are resolved transitively from the OBJ's map_Kd.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ]
+        },
+        "nodataFill": { "$ref": "#/$defs/nodataFill" },
+        "credit": { "type": "string", "description": "Per-variant credit override." },
+        "date": { "type": "string", "description": "Per-variant capture-date override." },
+        "method": { "type": "string", "description": "Per-variant imaging method." },
+        "description": { "$ref": "#/$defs/localizedString" }
+      },
+      "required": ["suffix", "obj"],
+      "additionalProperties": false
     }
   }
 }
