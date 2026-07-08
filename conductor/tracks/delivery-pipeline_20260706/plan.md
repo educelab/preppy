@@ -47,7 +47,7 @@ self-contained glb.
       Hausdorff vs budget.
 - [x] Task 2.3: `assemble.py` — `embed(geom_glb, ktx2s)` via gltf-transform
       (`KHR_texture_basisu`), preserving meshopt + `KHR_texture_transform`.
-- [ ] Task 2.4: Content-hash helper (input+config SHA-256, 8 hex) + `--prune`.
+- [x] Task 2.4: Content-hash helper (input+config SHA-256, 8 hex) + `--prune`.
 ### Verification
 - [ ] Colorspace + dilation produce correct KTX2; a variant glb embeds its KTX2,
       loads in the spike page, and keeps its transform; embed round-trip keeps
