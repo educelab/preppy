@@ -103,7 +103,9 @@ self-contained glb.
 - [x] Unit + smoke tests passing (63/63); `voyager-preppy -h` green;
       `voyager-check-tools` reports the full toolchain OK.
 - [x] `tech-stack.md` / README updated for the new toolchain.
-- [ ] Ready for review (open the MR).
+- [x] Ready for review — MR !7 open into `develop`
+      (https://gitlab.com/educelab/dri-voyager-preppy/-/merge_requests/7).
+      Track stays in_progress pending real-`mvs` operator sign-off + merge.
 
 ---
 

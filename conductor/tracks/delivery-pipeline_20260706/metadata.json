@@ -10,5 +10,6 @@
   "current_task": "final-verification",
   "phases": { "total": 5, "completed": 5 },
   "tasks": { "total": 15, "completed": 15 },
+  "merge_request": "https://gitlab.com/educelab/dri-voyager-preppy/-/merge_requests/7",
   "commits": []
 }
