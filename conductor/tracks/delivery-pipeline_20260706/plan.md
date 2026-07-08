@@ -62,14 +62,19 @@ self-contained glb.
 - [x] Task 3.1: `manifest.py` (replaces `voyager.py`) — per-object manifest with
       flat `variants[] {id,label,uri,default}` + object metadata (`units:"cm"`) +
       optional per-variant overrides; optional `index.json`.
-- [~] Task 3.2: Rewrite `apps/file_prep.py` — **per variant** (no grouping):
+- [x] Task 3.2: Rewrite `apps/file_prep.py` — **per variant** (no grouping):
       resolve texture(s) transitively via `parse_materials` → normalize+encode
       each → gltfpack → embed all → one self-contained glb → manifest entry.
-- [ ] Task 3.3: Output layout `out/<prefix>/<prefix>_<suffix>.glb` +
+- [x] Task 3.3: Output layout `out/<prefix>/<prefix>_<suffix>.glb` +
       `manifest.json` + thumb; `--hash-names` (default on), `--uri` prefixing.
+      (Thumbnail is Task 4.3; layout/hashing/uri done here.)
 ### Verification
-- [ ] Full `mvs` run yields a per-object manifest + one self-contained glb per
+- [~] Full `mvs` run yields a per-object manifest + one self-contained glb per
       variant; assets load and switch (camera-preserving) in the spike page.
+      **Mechanical PASS** — synthetic multi-variant run emits the A4 layout
+      (`out/<prefix>/manifest.json` + `<prefix>_<suffix>.<hash>.glb` + `index.json`),
+      manifest matches the spec (single default, overrides, `units:cm`), and each
+      glb keeps all four extensions. Real-`mvs` render/switch is the operator gate.
 
 ## Phase 4: Input schema, CLI, thumbnails (A1, A5, A6)
 ### Tasks
