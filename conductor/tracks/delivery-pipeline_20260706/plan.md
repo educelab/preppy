@@ -78,14 +78,14 @@ self-contained glb.
 
 ## Phase 4: Input schema, CLI, thumbnails (A1, A5, A6)
 ### Tasks
-- [ ] Task 4.1: Rewrite `templates/*.schema.json` for the **object → `variants[]`**
+- [x] Task 4.1: Rewrite `templates/*.schema.json` for the **object → `variants[]`**
       shape (`prefix`, `suffix`, `label`, `obj`, `default`, `nodataFill`, optional
       `texture`/provenance overrides); add an `mvs` example config.
-- [ ] Task 4.2: CLI flags `--ktx2-mode {etc1s,uastc}`, `-si`/`--decimate-error`,
+- [x] Task 4.2: CLI flags `--ktx2-mode {etc1s,uastc}`, `-si`/`--decimate-error`,
       `--no-decimate`, `--hash-names`/`--no-hash-names`, `--prune`, `--nodata-fill`;
       keep `--uri`, `--keep-tmp`.
-- [ ] Task 4.3: Texture-crop thumbnails via mogrify (default variant).
-- [ ] Task 4.4: Integration smoke test against a trimmed `mvs` sample.
+- [x] Task 4.3: Texture-crop thumbnails via mogrify (default variant).
+- [x] Task 4.4: Integration smoke test against a trimmed `mvs` sample.
 ### Verification
 - [ ] Config validates against schema; CLI flags behave; smoke test asserts the
       emitted manifest + self-contained variant glbs.
