@@ -5,25 +5,30 @@ stages:
 ### Tests ###
 .test:
   before_script:
-    - curl -fsSL https://deb.nodesource.com/setup_19.x | bash -
+    - curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
     - apt update
     - apt install -y imagemagick nodejs gcc g++ make
     - apt upgrade -y
     - python -m pip install --upgrade pip setuptools wheel
     - npm config set registry https://registry.npmjs.org/
-    - npm install -g cesium@1.99.0 obj2gltf gltf-pipeline
+    - npm install -g cesium obj2gltf gltf-pipeline
   script:
     - python -m pip install .
     - voyager-preppy -h
   tags:
     - docker
 
-test:3.9:
+test:3.11:
   extends: .test
   stage: test
-  image: python:3.9
+  image: python:3.11
 
-test:3.10:
+test:3.12:
   extends: .test
   stage: test
-  image: python:3.10
+  image: python:3.12
+
+test:3.13:
+  extends: .test
+  stage: test
+  image: python:3.13
