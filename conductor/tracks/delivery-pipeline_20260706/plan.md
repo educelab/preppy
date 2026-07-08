@@ -49,16 +49,20 @@ self-contained glb.
       (`KHR_texture_basisu`), preserving meshopt + `KHR_texture_transform`.
 - [x] Task 2.4: Content-hash helper (input+config SHA-256, 8 hex) + `--prune`.
 ### Verification
-- [ ] Colorspace + dilation produce correct KTX2; a variant glb embeds its KTX2,
+- [x] Colorspace + dilation produce correct KTX2; a variant glb embeds its KTX2,
       loads in the spike page, and keeps its transform; embed round-trip keeps
-      meshopt.
+      meshopt. **PASS** — mechanical chain verified end-to-end on a synthetic
+      multi-material asset (F1 name-match correct with reversed MTL order; all four
+      extensions — meshopt/quantization/texture_transform/texture_basisu — survive
+      the embed; F2 OPAQUE forced). Render on real multi-material data
+      operator-confirmed in Phase 0.
 
 ## Phase 3: Orchestration & manifest (A3, A4)
 ### Tasks
-- [ ] Task 3.1: `manifest.py` (replaces `voyager.py`) — per-object manifest with
+- [x] Task 3.1: `manifest.py` (replaces `voyager.py`) — per-object manifest with
       flat `variants[] {id,label,uri,default}` + object metadata (`units:"cm"`) +
       optional per-variant overrides; optional `index.json`.
-- [ ] Task 3.2: Rewrite `apps/file_prep.py` — **per variant** (no grouping):
+- [~] Task 3.2: Rewrite `apps/file_prep.py` — **per variant** (no grouping):
       resolve texture(s) transitively via `parse_materials` → normalize+encode
       each → gltfpack → embed all → one self-contained glb → manifest entry.
 - [ ] Task 3.3: Output layout `out/<prefix>/<prefix>_<suffix>.glb` +
