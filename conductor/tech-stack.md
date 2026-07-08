@@ -13,19 +13,31 @@ as the intended modern floor, not the current `setup.cfg` values.
 ## Pipeline
 
 ### Python dependencies
-- `Pillow` — image inspection (format, colorspace, dimensions).
-- `natsort`, `tqdm` — ordering and progress.
-- `pymeshlab` *(new, optional)* — Hausdorff validation of decimated geometry.
+- `Pillow` — image inspection; also used by the legacy `convert.py` path.
+- `natsort`, `tqdm` — ordering and progress (`natsort` used by `merge-items`).
+- `pymeshlab` *(optional, `.[validate]`)* — Hausdorff validation of decimated
+  geometry.
+- `jsonschema` *(optional, `.[test]`)* — validates example configs against the
+  input schema in the test suite.
 
 Deps may be bumped freely to current releases.
 
 ### External CLI tools (must be on PATH)
-- **ImageMagick `mogrify`** *(kept)* — normalizes exotic textures (CIELab,
-  16-bit) to 8-bit sRGB. The only correct color path.
-- **`toktx`** (KTX-Software) *(new)* — encodes `.ktx2` (UASTC/ETC1S + mipmaps).
+- **ImageMagick `magick`/`mogrify`** *(kept)* — normalizes exotic textures
+  (CIELab, 16-bit) to 8-bit sRGB (the only correct color path) and crops
+  thumbnails.
+- **`ktx` (KTX-Software ≥ v5, `ktx create`)** *(new)* — encodes `.ktx2`
+  (ETC1S default / UASTC + mipmaps). `toktx` was **removed in v5** — the pipeline
+  uses `ktx create` (spike hard requirement).
 - **`gltfpack`** (meshoptimizer) *(new)* — OBJ → error-bounded-decimated,
-  meshopt-compressed geometry-only `.glb`.
-- **Retired**: `obj2gltf`, `gltf-pipeline` (replaced by gltfpack + toktx).
+  meshopt-compressed geometry `.glb` (UVs kept "used"; normals computed in the
+  viewer).
+- **`node` (20+) + bundled `@gltf-transform/core` helper** *(new)* — embeds each
+  KTX2 into the geometry glb (`KHR_texture_basisu`), preserving meshopt +
+  `KHR_texture_transform`. Run via `preppy/node/embed.mjs`; deps installed with
+  `npm install --prefix <preppy>/node`.
+- **Retired**: `obj2gltf`, `gltf-pipeline` (replaced by gltfpack + ktx +
+  the gltf-transform embed helper). `toktx` never used (v5 removed it).
 
 ## Viewer
 - **three.js** + `GLTFLoader`, `MeshoptDecoder`, `KTX2Loader` (+ Basis
@@ -40,8 +52,10 @@ Node is now a first-class build/runtime requirement:
   `gltfpack` where a binary isn't available.
 
 ## Data / storage
-- **No database.** Output is static files: geometry `.glb`, `.ktx2` textures,
-  per-object manifest JSON, optional `index.json`, thumbnails.
+- **No database.** Output is static files: one self-contained `.glb` per variant
+  (meshopt geometry + embedded KTX2), a per-object `manifest.json`, an optional
+  top-level `index.json`, and per-object thumbnails. Replaces the old Voyager
+  `*.svx.json` + `items.json` pair.
 
 ## Infrastructure
 - Static hosting on the existing DRI web host (e.g. `infoforest.cs.uky.edu`),

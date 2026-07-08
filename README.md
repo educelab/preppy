@@ -38,11 +38,57 @@ Verify everything is installed and new enough:
 voyager-check-tools
 ```
 
+## Usage
+
+`voyager-preppy` turns source OBJs + textures into **one self-contained `.glb`
+per variant** (meshopt geometry with embedded KTX2) plus a viewer-native
+per-object manifest.
+
+```shell
+voyager-preppy -i config.json -o out/
+```
+
+The input config is a flat array of **objects**, each with a flat `variants[]`
+(one mesh + its texture(s) per variant). See
+[`templates/prep-models.schema.json`](templates/prep-models.schema.json) for the
+full schema and [`templates/mvs-example.json`](templates/mvs-example.json) for a
+worked example. Each variant's texture(s) are resolved transitively from its
+OBJ's `map_Kd` — no texture paths in the config normally.
+
+Output layout (per-object directory named by `prefix`, defaults to `id`):
+
+```
+out/
+  index.json                          # optional host archive listing
+  <prefix>/
+    manifest.json                     # the scene the viewer loads
+    <prefix>_<suffix>.<hash>.glb      # one self-contained glb per variant
+    <prefix>_thumb.jpg                # default-variant thumbnail
+```
+
+Asset filenames carry an inputs+config content hash by default (served
+`immutable`); `manifest.json` / `index.json` keep stable names and hold the
+current hashed URIs. Useful flags:
+
+| Flag | Effect |
+| --- | --- |
+| `--ktx2-mode {etc1s,uastc}` | KTX2/Basis codec (default `etc1s`) |
+| `-s/--decimate-error FLOAT` | gltfpack `-si` target (default `0.2`) |
+| `--no-decimate` | meshopt-compress without simplifying |
+| `--nodata-fill COLOR` | default atlas no-data fill to dilate over |
+| `--no-hash-names` | stable asset names (not cacheable `immutable`) |
+| `--uri PREFIX` | absolute-URL prefix for manifest `uri`s |
+| `--prune` | delete hashed assets no longer referenced by a manifest |
+| `--keep-tmp` | keep intermediate PNG/KTX2/geometry files |
+
+Run `voyager-preppy -h` for the complete list.
+
 ### Legacy path (deprecated)
 
-The original `voyager-obj2glb` / `voyager-preppy` OBJ→GLB path uses `obj2gltf`
-and `gltf-pipeline` and is **deprecated** — it will be removed once the new
-delivery pipeline lands. To keep using it during the transition:
+The single-object `voyager-obj2glb` tool (and its `convert.py` core) still uses
+`obj2gltf` + `gltf-pipeline` to emit a Draco-compressed GLB. It is **deprecated**
+in favor of the delivery pipeline above and will be removed. To keep using it
+during the transition:
 
 ```shell
 npm install -g obj2gltf gltf-pipeline
