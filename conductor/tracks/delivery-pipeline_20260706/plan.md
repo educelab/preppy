@@ -42,7 +42,7 @@ self-contained glb.
 - [x] Task 2.1: `texture.py` — `normalize(src, nodata_fill=None)` (mogrify
       CIELab/16-bit → 8-bit sRGB, resize `>8192`, edge-dilate over `nodata_fill`)
       + `encode_ktx2(png, mode)` (`ktx create`, mips, ETC1S|UASTC).
-- [ ] Task 2.2: `geometry.py` — `obj_to_geometry_glb()` (gltfpack geometry+UV,
+- [x] Task 2.2: `geometry.py` — `obj_to_geometry_glb()` (gltfpack geometry+UV,
       `-si 0.2`, `-cc`, UVs kept "used"; **no** normal bake) + `validate()`
       Hausdorff vs budget.
 - [ ] Task 2.3: `assemble.py` — `embed(geom_glb, ktx2s)` via gltf-transform
