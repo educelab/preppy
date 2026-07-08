@@ -19,7 +19,7 @@ The pipeline shells out to CLI tools that must be on `PATH` (see README for inst
 - Legacy only: `obj2gltf` + `gltf-pipeline` (for `voyager-obj2glb`).
 - Optional: `pymeshlab` (`.[validate]`) for the Hausdorff decimation gate.
 
-Python deps (`natsort`, `Pillow`, `tqdm`) install via `pip install .`.
+Python deps (`natsort`, `Pillow`, `numpy`, `scipy`, `tqdm`) install via `pip install .`. `numpy`/`scipy` power the in-memory no-data fill (`texture.fill_nodata`).
 
 ## Commands
 
@@ -40,7 +40,7 @@ There **is** a test suite now (`tests/`, pytest): `python -m pytest tests/`. Tes
 Console entrypoints in `preppy/apps/` are thin argparse CLIs over the library modules in `preppy/`. Leaf modules factor command-building into pure `*_cmd` helpers so they unit-test without the tools installed.
 
 - **`obj_helpers.py`** — `parse_materials()` (mtllib → `map_Kd`, mmap-scanned) and `parse_material_textures()` which maps each `newmtl` **name** → resolved texture path. Name-keying is essential: gltfpack orders materials by MTL declaration, not numeric name, so the embed matches by name (Phase 0 finding F1).
-- **`texture.py`** — `normalize()` (mogrify: CIELab/16-bit → 8-bit sRGB, resize `>max_dim`, optional edge-dilation over a `nodata_fill`), `encode_ktx2()` (`ktx create`, mips, ETC1S|UASTC), `thumbnail()` (center-crop).
+- **`texture.py`** — `normalize()` (ImageMagick `magick`: CIELab/16-bit → 8-bit sRGB, resize `>max_dim`), `fill_nodata()` (in-memory Pillow+numpy+scipy nearest-valid-pixel back-fill over a `nodata_fill` color, run on the *downsized* image via `distance_transform_edt` — replaced an ImageMagick `-morphology Dilate` that ran at full source resolution and hung on gigapixel textures; `nodataFill` hex may omit the leading `#`), `encode_ktx2()` (`ktx create`, mips, ETC1S|UASTC), `thumbnail()` (center-crop).
 - **`geometry.py`** — `obj_to_geometry_glb()` (gltfpack `-si` decimation + `-cc` meshopt; UVs kept "used" or the atlas scrambles; **normals computed in the viewer**, not baked) and `validate()` (Hausdorff vs a budget via pymeshlab — needs a *plain* glb; it refuses a meshopt one, which segfaults pymeshlab).
 - **`assemble.py`** — `embed()` runs the bundled Node helper to swap each material's baseColorTexture for its KTX2 (`KHR_texture_basisu`), preserving `EXT_meshopt_compression` (only if the meshopt encoder is registered — F3) and `KHR_texture_transform`.
 - **`cache.py`** — content hash over **inputs + config + tool versions** (never the output glb — basis encoding is non-deterministic), `hashed_name()`, and `prune()`.

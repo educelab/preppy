@@ -82,7 +82,7 @@ current hashed URIs. Useful flags:
 | `--ktx2-mode {etc1s,uastc}` | KTX2/Basis codec (default `etc1s`) |
 | `-s/--decimate-error FLOAT` | gltfpack `-si` target (default `0.2`) |
 | `--no-decimate` | meshopt-compress without simplifying |
-| `--nodata-fill COLOR` | default atlas no-data fill to dilate over |
+| `--nodata-fill COLOR` | default atlas no-data fill (hex, `#` optional) to back-fill from the nearest chart pixel |
 | `--no-hash-names` | stable asset names (not cacheable `immutable`) |
 | `--data-root DIR` | root that relative `obj` paths resolve against (default: CWD) |
 | `--uri PREFIX` | absolute-URL prefix for manifest `uri`s |

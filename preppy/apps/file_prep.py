@@ -239,7 +239,8 @@ def _build_parser() -> argparse.ArgumentParser:
                           metavar='INT',
                           help='Downsize textures larger than this (default: 8192)')
     tex_opts.add_argument('--nodata-fill', default=None, metavar='COLOR',
-                          help='Default atlas no-data fill color to dilate over '
+                          help='Default atlas no-data fill color (hex, # optional) '
+                               'to back-fill from the nearest chart pixel '
                                '(overridden per object/variant by nodataFill)')
 
     geo_opts = parser.add_argument_group('geometry options')
