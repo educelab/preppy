@@ -1,0 +1,12 @@
+{
+  "name": "dri-voyager-preppy-node",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Node helper (embed.mjs) that embeds KTX2 textures into the meshopt geometry glb for dri-voyager-preppy. Run `npm install` here before using the delivery pipeline.",
+  "dependencies": {
+    "@gltf-transform/core": "^4.4.1",
+    "@gltf-transform/extensions": "^4.4.1",
+    "meshoptimizer": "^1.2.0"
+  }
+}

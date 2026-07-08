@@ -40,10 +40,11 @@ def test_executable_name_posix(monkeypatch):
 
 def test_registry_has_new_toolchain_and_not_legacy():
     assert set(tools.TOOLS) == {
-        'magick', 'mogrify', 'ktx', 'gltfpack', 'gltf-transform'}
+        'magick', 'mogrify', 'ktx', 'gltfpack', 'node'}
     assert 'obj2gltf' not in tools.TOOLS
     assert 'gltf-pipeline' not in tools.TOOLS
     assert tools.TOOLS['ktx'].min_version == (5, 0, 0)
+    assert tools.TOOLS['node'].min_version == (20, 0, 0)
 
 
 def test_status_ok_semantics():

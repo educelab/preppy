@@ -13,13 +13,20 @@ brew install ktx                # KTX-Software >= v5 (`ktx create`) — KTX2 enc
 brew install node               # Node 20+ (for the tools below)
 
 # Node tools
-npm install -g gltfpack                # meshoptimizer geometry decimation/compression
-npm install -g @gltf-transform/cli     # embeds KTX2 into the variant glb (`gltf-transform`)
+npm install -g gltfpack          # meshoptimizer geometry decimation/compression
 
 # Python package (optionally with pymeshlab for Hausdorff validation)
 pip install .
-pip install '.[validate]'       # includes pymeshlab
+pip install '.[validate]'        # includes pymeshlab
+
+# KTX2 embed helper (Node): install its deps once, in the installed package dir
+npm install --prefix "$(python -c 'import preppy, pathlib; print(pathlib.Path(preppy.__file__).parent / "node")')"
 ```
+
+The KTX2-into-glb embed step runs a bundled Node helper
+(`preppy/node/embed.mjs`, using `@gltf-transform/core` + `meshoptimizer`) rather
+than the `gltf-transform` CLI, so it needs `node` (20+) plus that helper's npm
+deps installed once as shown above.
 
 > **KTX-Software must be >= v5.0.0** — `toktx` was removed in v5 and the pipeline
 > uses `ktx create`. If `brew install ktx` is unavailable on your platform, grab a

@@ -23,7 +23,17 @@ def main():
     print('External tool check:')
     print(tools.format_report(statuses))
 
-    all_ok = all(st.ok for st in statuses.values())
+    # The KTX2 embed step also needs the bundled Node helper's npm deps.
+    deps_ok = True
+    if not names or 'node' in names:
+        from preppy import assemble
+        deps_ok = assemble.node_deps_installed()
+        mark = 'OK' if deps_ok else 'MISSING'
+        detail = (str(assemble.NODE_DIR) if deps_ok
+                  else f'run: npm install --prefix {assemble.NODE_DIR}')
+        print(f'  [{mark:>7}] embed helper deps: {detail}')
+
+    all_ok = deps_ok and all(st.ok for st in statuses.values())
     if not all_ok:
         sys.stdout.flush()
         print('\nSome tools are missing or too old. See the README for install '

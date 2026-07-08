@@ -40,9 +40,13 @@ From: python:3.11-slim
   ktx --version
 
   # Install the node-based tools.
-  # New delivery toolchain: gltfpack (geometry) + gltf-transform (KTX2 embed).
+  # New delivery toolchain: gltfpack (geometry). The KTX2 embed step uses a
+  # bundled Node helper (preppy/node/embed.mjs) whose deps are installed below.
   # obj2gltf/gltf-pipeline are the deprecated legacy path, kept until it is removed.
-  npm install -g gltfpack @gltf-transform/cli obj2gltf gltf-pipeline
+  npm install -g gltfpack obj2gltf gltf-pipeline
+
+  # Install the embed helper's npm deps (@gltf-transform/core + meshoptimizer)
+  npm install --prefix /usr/local/educelab/dri-voyager-preppy/preppy/node
 
   # Create a venv for this project
   python3 -m venv /usr/local/educelab/dri-voyager-preppy/.venv/

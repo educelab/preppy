@@ -68,8 +68,11 @@ TOOLS: Dict[str, ToolSpec] = {
     # flag; running it with no args prints a usage banner beginning with the
     # version.
     'gltfpack': ToolSpec('gltfpack', node_cli=True, version_args=()),
-    'gltf-transform': ToolSpec('gltf-transform', node_cli=True,
-                               version_args=('--version',)),
+    # The KTX2 embed step runs a bundled Node helper (assemble.embed) rather than
+    # the gltf-transform CLI, so `node` itself is the dependency. The helper's
+    # own npm deps are reported separately (assemble.node_deps_installed).
+    'node': ToolSpec('node', node_cli=False, version_args=('--version',),
+                     min_version=(20, 0, 0)),
 }
 
 
