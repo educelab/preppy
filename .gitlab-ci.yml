@@ -15,8 +15,6 @@ stages:
   script:
     - python -m pip install .
     - voyager-preppy -h
-  tags:
-    - docker
 
 test:3.11:
   extends: .test
