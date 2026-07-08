@@ -4,8 +4,24 @@ easy-to-get-wrong bits; the actual subprocess probing is covered by the
 ``voyager-check-tools`` console script against a real install.
 """
 
+import sys
+
+import pytest
+
 import preppy.tools as tools
 from preppy.tools import ToolSpec, ToolStatus
+
+
+def test_run_captures_output_on_success():
+    proc = tools.run([sys.executable, '-c', 'print("hello")'])
+    assert proc.returncode == 0
+    assert 'hello' in proc.stdout
+
+
+def test_run_raises_with_stderr_on_failure():
+    with pytest.raises(RuntimeError, match='boom'):
+        tools.run([sys.executable, '-c',
+                   'import sys; sys.stderr.write("boom"); sys.exit(3)'])
 
 
 def test_parse_version_variants():

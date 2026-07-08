@@ -16,7 +16,6 @@ quantize=False)`` or export to OBJ/PLY.
 
 import json
 import struct
-import subprocess as sp
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Union
@@ -68,7 +67,7 @@ def obj_to_geometry_glb(obj: PathLike, out: PathLike, *,
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = obj_to_geometry_glb_cmd(obj, out, target_error=target_error,
                                   meshopt=meshopt, quantize=quantize, extra=extra)
-    sp.run(cmd, check=True)
+    tools.run(cmd)
     return out
 
 

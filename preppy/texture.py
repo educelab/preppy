@@ -15,7 +15,6 @@ The command-building is factored into pure ``*_cmd`` helpers so it can be unit
 tested without the tools installed.
 """
 
-import subprocess as sp
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -106,7 +105,7 @@ def thumbnail(src: PathLike, dst: PathLike, *, size: int = 512) -> Path:
     tools.require('magick')
     src, dst = Path(src), Path(dst)
     dst.parent.mkdir(parents=True, exist_ok=True)
-    sp.run(thumbnail_cmd(src, dst, size=size), check=True)
+    tools.run(thumbnail_cmd(src, dst, size=size))
     return dst
 
 
@@ -129,7 +128,7 @@ def normalize(src: PathLike, dst: Optional[PathLike] = None, *,
 
     cmd = normalize_cmd(src, dst, max_dim=max_dim, nodata_fill=nodata_fill,
                         fuzz=fuzz, dilate=dilate)
-    sp.run(cmd, check=True)
+    tools.run(cmd)
     return dst
 
 
@@ -144,5 +143,5 @@ def encode_ktx2(png: PathLike, dst: Optional[PathLike] = None, *,
     dst = Path(dst) if dst is not None else png.with_suffix('.ktx2')
 
     cmd = encode_ktx2_cmd(png, dst, mode=mode, threads=threads)
-    sp.run(cmd, check=True)
+    tools.run(cmd)
     return dst

@@ -31,15 +31,19 @@ uses validated defaults for the rest.
 
 import argparse
 import json
+import logging
 import shutil
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional
 
 from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from preppy import assemble, cache, geometry, manifest, texture, tools
 from preppy.geometry import DEFAULT_TARGET_ERROR
 from preppy.obj_helpers import _mtllibs, parse_material_textures
+
+log = logging.getLogger(__name__)
 
 #: External tools whose versions are folded into the content hash.
 _HASH_TOOLS = ('magick', 'ktx', 'gltfpack', 'node')
@@ -138,7 +142,7 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
             raise RuntimeError(
                 f'variant {suffix!r}: decimation deviation {detail} exceeds '
                 f'--deviation-budget {opts.deviation_budget}')
-        print(f'  validated {suffix}: Hausdorff {detail}')
+        log.info('  validated %s: Hausdorff %s', suffix, detail)
 
     # 4. Name the output asset (content hash over inputs+config, never output).
     digest = None
@@ -208,7 +212,7 @@ def process_object(object_cfg: Mapping, *, data_root: Path, out_dir: Path,
     if opts.prune:
         removed = cache.prune(obj_out_dir, keep=asset_names)
         if removed:
-            print(f'  pruned {len(removed)} stale asset(s) from {prefix}/')
+            log.info('  pruned %d stale asset(s) from %s/', len(removed), prefix)
 
     return manifest.index_entry(
         object_id, man.get('title', object_id),
@@ -293,18 +297,22 @@ def _normalize_args(args: argparse.Namespace) -> argparse.Namespace:
 
 
 def main():
+    # Plain-message logging; logging_redirect_tqdm routes records through
+    # tqdm.write during the run so progress bars are not clobbered.
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+
     args = _normalize_args(_build_parser().parse_args())
 
     config_path = Path(args.input)
-    print('Loading input config...')
+    log.info('Loading input config...')
     with config_path.open() as f:
         config = json.load(f)
     if not isinstance(config, list):
         raise SystemExit('Input config must be a JSON array of objects.')
 
     num_variants = sum(len(o.get('variants') or []) for o in config)
-    print(f'Loaded: {len(config)} object(s), {num_variants} variant(s)')
-    print(f'Resolving relative obj paths against {args.data_root}')
+    log.info('Loaded: %d object(s), %d variant(s)', len(config), num_variants)
+    log.info('Resolving relative obj paths against %s', args.data_root)
 
     out_dir = Path(args.output)
     tmp_dir = out_dir / 'tmp'
@@ -314,24 +322,25 @@ def main():
     args.tool_versions = tool_versions() if args.hash_names else {}
 
     index_objects = []
-    outer = tqdm(config, desc='Objects')
-    inner = tqdm(desc='Variants', leave=False)
-    for object_cfg in outer:
-        outer.set_description_str(f'Object {object_cfg.get("id", "?")}')
-        index_objects.append(process_object(
-            object_cfg, data_root=args.data_root, out_dir=out_dir,
-            tmp_dir=tmp_dir, opts=args, progress=inner))
-    inner.close()
-    outer.close()
+    with logging_redirect_tqdm():
+        outer = tqdm(config, desc='Objects')
+        inner = tqdm(desc='Variants', leave=False)
+        for object_cfg in outer:
+            outer.set_description_str(f'Object {object_cfg.get("id", "?")}')
+            index_objects.append(process_object(
+                object_cfg, data_root=args.data_root, out_dir=out_dir,
+                tmp_dir=tmp_dir, opts=args, progress=inner))
+        inner.close()
+        outer.close()
 
-    print('Writing index.json')
+    log.info('Writing index.json')
     manifest.write_json(manifest.build_index(index_objects),
                         out_dir / 'index.json')
 
     if not args.keep_tmp and tmp_dir.exists():
-        print('Cleaning up')
+        log.info('Cleaning up')
         shutil.rmtree(tmp_dir)
-    print('Done')
+    log.info('Done')
 
 
 if __name__ == '__main__':

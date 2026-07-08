@@ -16,9 +16,10 @@ Before first use, install the helper's Node dependencies::
 """
 
 import shutil
-import subprocess as sp
 from pathlib import Path
-from typing import List, Mapping, Optional, Union
+from typing import List, Mapping, Union
+
+from preppy import tools
 
 PathLike = Union[str, Path]
 
@@ -69,5 +70,5 @@ def embed(geom_glb: PathLike, ktx2_by_material: Mapping[str, PathLike],
     out_glb.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = embed_cmd(node, geom_glb, out_glb, ktx2_by_material)
-    sp.run(cmd, check=True)
+    tools.run(cmd)
     return out_glb

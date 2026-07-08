@@ -180,6 +180,25 @@ def require(*names: str) -> None:
             + '\nSee the README for installation instructions.')
 
 
+def run(cmd, **kwargs) -> sp.CompletedProcess:
+    """Run an external tool, capturing its output so it does not clobber a live
+    ``tqdm`` progress bar.
+
+    On success the captured ``stdout``/``stderr`` are returned on the
+    :class:`subprocess.CompletedProcess` (callers may log them at debug); on a
+    nonzero exit a :class:`RuntimeError` is raised with the tool's ``stderr``
+    included, so failures stay actionable even though output is suppressed.
+    """
+    proc = sp.run(cmd, capture_output=True, text=True, **kwargs)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or '').strip()
+        raise RuntimeError(
+            f'command failed (exit {proc.returncode}): '
+            f'{" ".join(str(c) for c in cmd)}'
+            + (f'\n{detail}' if detail else ''))
+    return proc
+
+
 def format_report(statuses: Dict[str, ToolStatus]) -> str:
     """Human-readable one-line-per-tool summary for the console script."""
     lines = []
