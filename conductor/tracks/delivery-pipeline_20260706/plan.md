@@ -31,7 +31,7 @@ self-contained glb.
       the existing `platform.system()` `.cmd` handling); document install.
 - [x] Task 1.2: Bump Python floor to 3.11+, refresh deps; add optional
       `pymeshlab`. Update `setup.cfg`, `requirements.txt`, Singularity def.
-- [ ] Task 1.3: Mark `obj2gltf`/`gltf-pipeline` path deprecated (keep old
+- [x] Task 1.3: Mark `obj2gltf`/`gltf-pipeline` path deprecated (keep old
       entrypoint working until the new one lands).
 ### Verification
 - [ ] Fresh install exposes console scripts; tool detection reports clearly when
