@@ -87,14 +87,24 @@ self-contained glb.
 - [x] Task 4.3: Texture-crop thumbnails via mogrify (default variant).
 - [x] Task 4.4: Integration smoke test against a trimmed `mvs` sample.
 ### Verification
-- [ ] Config validates against schema; CLI flags behave; smoke test asserts the
-      emitted manifest + self-contained variant glbs.
+- [x] Config validates against schema; CLI flags behave; smoke test asserts the
+      emitted manifest + self-contained variant glbs. **PASS** — `test_schema`
+      validates both example configs (+ negatives); flags exercised
+      (`--decimate-error` rehashes, `--prune` removes stale, `--no-hash-names`,
+      `--uri`, thumbnails); `test_integration` asserts the full manifest + asset
+      set end-to-end on a trimmed multi-material sample.
 
 ## Final Verification
-- [ ] All acceptance criteria met on real `mvs` data.
-- [ ] Unit + smoke tests passing; `voyager-preppy -h` green.
-- [ ] `tech-stack.md` / README updated for the new toolchain.
-- [ ] Ready for review.
+- [~] All acceptance criteria met on real `mvs` data. Mechanically met on
+      synthetic/trimmed data (see below); **real-`mvs` render/switch is the
+      operator gate**. Known gap: automatic **Hausdorff decimation gating** is
+      not wired into the orchestrator — `geometry.validate()` exists but is
+      called manually (pymeshlab needs a plain, non-meshopt glb). Deferred to
+      `harden-migrate` (docs/implementation-plan Phase 4 "Harden").
+- [x] Unit + smoke tests passing (63/63); `voyager-preppy -h` green;
+      `voyager-check-tools` reports the full toolchain OK.
+- [x] `tech-stack.md` / README updated for the new toolchain.
+- [ ] Ready for review (open the MR).
 
 ---
 
