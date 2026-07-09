@@ -10,7 +10,7 @@ The pipeline shells out to several command-line tools that must be on `PATH`.
 # System tools
 brew install imagemagick        # `mogrify` — texture normalization
 brew install ktx                # KTX-Software >= v5 (`ktx create`) — KTX2 encoding
-brew install node               # Node 20+ (for the tools below)
+brew install node               # Node 24+ LTS (for the tools below)
 
 # Node tools
 npm install -g gltfpack          # meshoptimizer geometry decimation/compression
@@ -27,7 +27,7 @@ npm install --prefix "$(python -c 'import preppy, pathlib; print(pathlib.Path(pr
 
 The KTX2-into-glb embed step runs a bundled Node helper
 (`preppy/node/embed.mjs`, using `@gltf-transform/core` + `meshoptimizer`) rather
-than the `gltf-transform` CLI, so it needs `node` (20+) plus that helper's npm
+than the `gltf-transform` CLI, so it needs `node` (24+ LTS) plus that helper's npm
 deps installed once as shown above.
 
 > **KTX-Software must be >= v5.0.0** — `toktx` was removed in v5 and the pipeline

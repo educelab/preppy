@@ -32,7 +32,7 @@ Deps may be bumped freely to current releases.
 - **`gltfpack`** (meshoptimizer) *(new)* — OBJ → error-bounded-decimated,
   meshopt-compressed geometry `.glb` (UVs kept "used"; normals computed in the
   viewer).
-- **`node` (20+) + bundled `@gltf-transform/core` helper** *(new)* — embeds each
+- **`node` (24+ LTS) + bundled `@gltf-transform/core` helper** *(new)* — embeds each
   KTX2 into the geometry glb (`KHR_texture_basisu`), preserving meshopt +
   `KHR_texture_transform`. Run via `preppy/node/embed.mjs`; deps installed with
   `npm install --prefix <preppy>/node`.
@@ -47,7 +47,7 @@ Deps may be bumped freely to current releases.
 
 ## Node.js
 Node is now a first-class build/runtime requirement:
-- **Node 20+** (the Singularity image uses Node 20/22).
+- **Node 24+ LTS** (CI and the Singularity image both install Node 24).
 - Runs the viewer build toolchain (bundler, three.js) and can install/run
   `gltfpack` where a binary isn't available.
 
