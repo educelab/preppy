@@ -24,6 +24,18 @@ def test_run_raises_with_stderr_on_failure():
                    'import sys; sys.stderr.write("boom"); sys.exit(3)'])
 
 
+def test_run_times_out():
+    with pytest.raises(RuntimeError, match='timed out'):
+        tools.run([sys.executable, '-c', 'import time; time.sleep(5)'],
+                  timeout=0.2)
+
+
+def test_run_timeout_none_disables_limit():
+    # None must not fall back to DEFAULT_TIMEOUT; the process just runs.
+    proc = tools.run([sys.executable, '-c', 'print("ok")'], timeout=None)
+    assert 'ok' in proc.stdout
+
+
 def test_parse_version_variants():
     assert tools._parse_version('ktx version: v5.0.0') == (5, 0, 0)
     assert tools._parse_version('gltfpack 0.22') == (0, 22, 0)

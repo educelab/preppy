@@ -26,7 +26,7 @@
     },
 
     "nodataFill": {
-      "description": "Atlas no-data fill color to edge-dilate over before KTX2 encoding (e.g. '#FF7F00'). null disables an inherited default; absent means no dilation. Resolved variant ?? object ?? CLI default.",
+      "description": "Atlas no-data fill color to back-fill from the nearest valid chart pixel before KTX2 encoding (e.g. '#FF7F00'). null disables an inherited default; absent means no back-fill. Resolved variant ?? object ?? CLI default.",
       "type": ["string", "null"]
     },
 
@@ -101,13 +101,6 @@
         "default": {
           "description": "Marks the initial variant. Exactly one variant per object is the default (the first, if none set this).",
           "type": "boolean"
-        },
-        "texture": {
-          "description": "Optional texture override(s); by default textures are resolved transitively from the OBJ's map_Kd.",
-          "oneOf": [
-            { "type": "string" },
-            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
-          ]
         },
         "nodataFill": { "$ref": "#/$defs/nodataFill" },
         "credit": { "type": "string", "description": "Per-variant credit override." },

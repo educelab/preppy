@@ -60,6 +60,6 @@ def test_accepts_optional_shapes(validator):
     cfg[0]['variants'] = [
         {'suffix': 'rgb', 'obj': 'a.obj', 'default': True, 'nodataFill': None},
         {'suffix': 'ir', 'obj': 'b.obj', 'credit': 'c', 'method': 'm',
-         'texture': ['t0.tif', 't1.tif']},
+         'date': '2026-01-01'},
     ]
     assert not list(validator.iter_errors(cfg))

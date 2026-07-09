@@ -103,8 +103,8 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
 
     # 1. Resolve textures transitively (material name -> image), by name so the
     #    embed matches gltfpack's declaration-ordered materials (F1).
-    ktx2_textures = parse_material_textures(obj_path)
-    if not ktx2_textures:
+    material_textures = parse_material_textures(obj_path)
+    if not material_textures:
         raise ValueError(
             f'variant {suffix!r}: no textured materials (map_Kd) found in '
             f'{obj_path}')
@@ -114,12 +114,15 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     # 2. Per texture: normalize -> KTX2. Keep each material's normalized PNG
     #    (keyed by its *referenced* texture basename) so the default variant can
     #    render a model preview from the normalized images, not the raw sources.
+    #    The normalized PNG is named after the *material* (matching its KTX2), so
+    #    two materials whose sources share a basename can't overwrite each other's
+    #    normalized image while the tmp filenames stay easy to interpret.
     ktx2_by_material: Dict[str, Path] = {}
     normalized_by_ref: Dict[str, Path] = {}
     thumb_src: Optional[Path] = None
-    for name, img in ktx2_textures.items():
-        png = texture.normalize(img, tmp_dir=var_tmp, max_dim=opts.max_dim,
-                                nodata_fill=nodata)
+    for name, img in material_textures.items():
+        png = texture.normalize(img, dst=var_tmp / f'{name}.png',
+                                max_dim=opts.max_dim, nodata_fill=nodata)
         if thumb_src is None:
             thumb_src = png
         normalized_by_ref[Path(img).name] = png
@@ -153,7 +156,7 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
         config = {'target_error': opts.target_error, 'ktx2_mode': opts.ktx2_mode,
                   'max_dim': opts.max_dim, 'nodata_fill': nodata}
         digest = cache.content_hash(
-            hash_inputs(obj_path, ktx2_textures), config=config,
+            hash_inputs(obj_path, material_textures), config=config,
             tool_versions=opts.tool_versions)
     name = cache.hashed_name(prefix, suffix, digest)
 
@@ -320,6 +323,12 @@ def _build_parser() -> argparse.ArgumentParser:
                                'model preview composites over (default: 222222)')
 
     adv_opts = parser.add_argument_group('advanced options')
+    adv_opts.add_argument('--tool-timeout', type=float,
+                          default=tools.DEFAULT_TIMEOUT, metavar='SECONDS',
+                          help='Per-invocation wall-clock limit for each external '
+                               'tool (magick/ktx/gltfpack/node), so a wedged tool '
+                               "can't hang the batch (default: %(default)gs; "
+                               '0 disables the limit)')
     adv_opts.add_argument('--keep-tmp', default=False,
                           action=argparse.BooleanOptionalAction,
                           help='Keep the temporary files directory')
@@ -345,6 +354,10 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(message)s')
 
     args = _normalize_args(_build_parser().parse_args())
+
+    # A per-tool wall-clock ceiling so a wedged encoder can't hang the batch;
+    # 0 (or negative) disables it. Applies to every tools.run() call this run.
+    tools.DEFAULT_TIMEOUT = args.tool_timeout if args.tool_timeout > 0 else None
 
     config_path = Path(args.input)
     log.info('Loading input config...')

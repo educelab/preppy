@@ -31,6 +31,16 @@ _IS_WINDOWS = platform.system() == 'Windows'
 # Semantic-version-ish token, optionally prefixed by 'v' (e.g. "v5.0.0", "0.22").
 _VERSION_RE = re.compile(r'v?(\d+)\.(\d+)(?:\.(\d+))?')
 
+#: Default wall-clock limit (seconds) for a single external tool invocation via
+#: :func:`run`. Generous — encoding/decimating a large mesh legitimately takes a
+#: while — but bounded so a wedged tool can't hang a whole batch indefinitely.
+#: The ``voyager-preppy`` ``--tool-timeout`` flag overrides this at startup.
+DEFAULT_TIMEOUT: Optional[float] = 600.0
+
+#: Short, fixed limit for version probes (:func:`check_tool`); reading a version
+#: banner should be instant, so a hang there is always a problem.
+_VERSION_TIMEOUT = 30.0
+
 
 @dataclass(frozen=True)
 class ToolSpec:
@@ -125,8 +135,13 @@ def check_tool(spec: ToolSpec) -> ToolStatus:
     status = ToolStatus(spec=spec, found=True, path=path)
 
     try:
-        proc = sp.run([exe, *spec.version_args], capture_output=True, text=True)
+        proc = sp.run([exe, *spec.version_args], capture_output=True, text=True,
+                      timeout=_VERSION_TIMEOUT)
         output = (proc.stdout or '') + (proc.stderr or '')
+    except sp.TimeoutExpired:
+        status.messages.append(
+            f'timed out after {_VERSION_TIMEOUT:g}s reading version')
+        return status
     except OSError as e:  # pragma: no cover - defensive
         status.messages.append(f'could not run {exe!r}: {e}')
         return status
@@ -180,16 +195,29 @@ def require(*names: str) -> None:
             + '\nSee the README for installation instructions.')
 
 
-def run(cmd, **kwargs) -> sp.CompletedProcess:
+def run(cmd, *, timeout: Optional[float] = -1.0, **kwargs) -> sp.CompletedProcess:
     """Run an external tool, capturing its output so it does not clobber a live
     ``tqdm`` progress bar.
+
+    ``timeout`` bounds the call in seconds; the sentinel ``-1.0`` (the default)
+    means "use :data:`DEFAULT_TIMEOUT`", ``None`` disables the limit, and any
+    other value overrides it. A tool that runs past the limit raises a
+    :class:`RuntimeError` (rather than hanging the whole batch).
 
     On success the captured ``stdout``/``stderr`` are returned on the
     :class:`subprocess.CompletedProcess` (callers may log them at debug); on a
     nonzero exit a :class:`RuntimeError` is raised with the tool's ``stderr``
     included, so failures stay actionable even though output is suppressed.
     """
-    proc = sp.run(cmd, capture_output=True, text=True, **kwargs)
+    if timeout == -1.0:
+        timeout = DEFAULT_TIMEOUT
+    try:
+        proc = sp.run(cmd, capture_output=True, text=True, timeout=timeout,
+                      **kwargs)
+    except sp.TimeoutExpired as e:
+        raise RuntimeError(
+            f'command timed out after {e.timeout:g}s: '
+            f'{" ".join(str(c) for c in cmd)}') from e
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or '').strip()
         raise RuntimeError(
