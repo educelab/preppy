@@ -77,6 +77,8 @@ def _patch_chain(monkeypatch, tmp_path, validate_result):
                         lambda png, **k: tmp_path / 'm.ktx2')
     monkeypatch.setattr(file_prep.geometry, 'obj_to_geometry_glb',
                         lambda obj, out, **k: Path(out))
+    monkeypatch.setattr(file_prep.geometry, 'strip_textures',
+                        lambda p: Path(p))
     monkeypatch.setattr(file_prep.geometry, 'validate',
                         lambda *a, **k: validate_result)
     monkeypatch.setattr(file_prep.assemble, 'embed',

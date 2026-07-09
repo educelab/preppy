@@ -11,7 +11,9 @@ gltfpack, plus optional Hausdorff validation of the decimation.
 pymeshlab's glTF reader **segfaults** on an ``EXT_meshopt_compression`` glb, so
 :func:`validate` refuses one (raising a clear error) and expects a plain,
 pymeshlab-readable mesh — build one with ``obj_to_geometry_glb(..., meshopt=False,
-quantize=False)`` or export to OBJ/PLY.
+quantize=False)`` or export to OBJ/PLY. That reader also aborts on any embedded
+image it can't decode, so run a plain glb through :func:`strip_textures` first
+(validation is geometry-only).
 """
 
 import json
@@ -94,6 +96,78 @@ def is_meshopt_glb(path: PathLike) -> bool:
         return False
     used = doc.get('extensionsUsed', []) or []
     return 'EXT_meshopt_compression' in used
+
+
+#: glTF extensions that only make sense alongside textures/materials; dropped
+#: with them so a stripped glb doesn't declare an extension it no longer uses.
+_TEXTURE_EXTENSIONS = frozenset({
+    'KHR_texture_basisu', 'KHR_texture_transform', 'KHR_materials_unlit'})
+
+
+def _read_glb_chunks(data: bytes):
+    """Parse a binary glb into an ordered list of ``(chunk_type, payload)``."""
+    if len(data) < 12 or data[:4] != b'glTF':
+        raise ValueError('not a binary glb')
+    total = struct.unpack('<I', data[8:12])[0]
+    chunks = []
+    off = 12
+    while off + 8 <= total:
+        clen = struct.unpack('<I', data[off:off + 4])[0]
+        ctype = data[off + 4:off + 8]
+        payload = data[off + 8:off + 8 + clen]
+        chunks.append((ctype, payload))
+        off += 8 + clen
+    return chunks
+
+
+def _write_glb_chunks(path: Path, chunks) -> None:
+    """Write ``(chunk_type, payload)`` chunks back out as a binary glb.
+
+    JSON chunks are padded with spaces and BIN chunks with zero bytes to the
+    4-byte alignment the glTF spec requires.
+    """
+    body = bytearray()
+    for ctype, payload in chunks:
+        pad = (-len(payload)) % 4
+        payload = payload + (b' ' if ctype == b'JSON' else b'\x00') * pad
+        body += struct.pack('<I', len(payload)) + ctype + payload
+    header = b'glTF' + struct.pack('<II', 2, 12 + len(body))
+    path.write_bytes(header + bytes(body))
+
+
+def strip_textures(path: PathLike) -> Path:
+    """Rewrite a **plain** glb in place, dropping every image/texture/material.
+
+    :func:`validate` only measures geometry, but gltfpack embeds each material's
+    ``map_Kd`` image into the glb — and pymeshlab's glTF reader (STB) aborts on
+    any image it can't decode (e.g. a placeholder image an untextured material
+    leaves behind: ``image[0] name = ""``). Removing the images, textures,
+    samplers, materials, and primitive material bindings leaves a
+    geometry-only mesh pymeshlab loads cleanly. The BIN chunk is left untouched
+    (now-unreferenced image bytes are harmless).
+    """
+    path = Path(path)
+    chunks = _read_glb_chunks(path.read_bytes())
+    for i, (ctype, payload) in enumerate(chunks):
+        if ctype != b'JSON':
+            continue
+        doc = json.loads(payload)
+        for key in ('images', 'textures', 'samplers', 'materials'):
+            doc.pop(key, None)
+        for mesh in doc.get('meshes', []):
+            for prim in mesh.get('primitives', []):
+                prim.pop('material', None)
+        for key in ('extensionsUsed', 'extensionsRequired'):
+            if key in doc:
+                kept = [e for e in doc[key] if e not in _TEXTURE_EXTENSIONS]
+                if kept:
+                    doc[key] = kept
+                else:
+                    doc.pop(key)
+        chunks[i] = (ctype, json.dumps(doc, separators=(',', ':')).encode())
+        break
+    _write_glb_chunks(path, chunks)
+    return path
 
 
 @dataclass

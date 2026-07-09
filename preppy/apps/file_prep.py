@@ -140,6 +140,10 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
         plain = geometry.obj_to_geometry_glb(
             obj_path, var_tmp / 'geom_plain.glb', target_error=opts.target_error,
             meshopt=False, quantize=False)
+        # gltfpack embeds each material's texture; pymeshlab's STB reader aborts
+        # on any it can't decode (incl. the placeholder an untextured material
+        # leaves as image[0]). Validation is geometry-only, so drop them.
+        geometry.strip_textures(plain)
         res = geometry.validate(obj_path, plain, budget=opts.deviation_budget)
         detail = f'max={res.max_distance:.4g}'
         if res.max_fraction_of_diagonal is not None:
