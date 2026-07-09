@@ -6,9 +6,14 @@
   "created": "2026-07-06T18:56:11Z",
   "updated": "2026-07-09T00:00:00Z",
   "depends_on": ["toolchain-spike_20260706", "delivery-pipeline_20260706"],
-  "current_phase": 1,
-  "current_task": "1.1",
-  "phases": { "total": 4, "completed": 0 },
-  "tasks": { "total": 13, "completed": 0 },
-  "commits": []
+  "current_phase": 2,
+  "current_task": "2.1",
+  "phases": { "total": 4, "completed": 1 },
+  "tasks": { "total": 13, "completed": 3 },
+  "commits": [
+    "e8f697b: viewer: scaffold TS + Vite web-component bundle",
+    "0609c16: viewer: <dri-viewer> custom-element skeleton + test harness",
+    "1bc60c7: viewer: three.js rendering core + loader stack",
+    "phase1: Playwright headless renderer-init verification"
+  ]
 }

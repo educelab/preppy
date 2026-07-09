@@ -24,12 +24,14 @@
     "build": "tsc --noEmit && vite build && tsc",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "three": "^0.169.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/three": "^0.169.0",
     "happy-dom": "^15.11.7",
     "typescript": "^5.6.0",

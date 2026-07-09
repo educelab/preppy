@@ -20,9 +20,9 @@ pipeline produces real assets. Each variant is its own self-contained glb.
       the variant `id`); CSS sizing.
 - [x] Task 1.3: Wire GLTFLoader + MeshoptDecoder + KTX2Loader + OrbitControls.
 ### Verification
-- [~] Empty widget mounts, sizes via CSS, and initializes the renderer.
-      (mount + sizing + guarded init unit-tested in happy-dom; real-WebGL renderer
-      init pending a browser check — tooling decision at the Phase 1 checkpoint.)
+- [x] Empty widget mounts, sizes via CSS, and initializes the renderer.
+      (unit-tested in happy-dom; real-WebGL renderer init verified headless via
+      Playwright/Chromium — e2e/phase1.spec.ts.)
 
 ## Phase 2: Load & render one variant (B2, B3, B6 defaults)
 ### Tasks
