@@ -263,7 +263,7 @@ def _frame_camera(scene, yfov: float, margin: float = 1.12):
 
 def render_preview(obj_path: PathLike, textures: Mapping[str, Path],
                    dst: PathLike, *, size: int = 512,
-                   bg: str = 'ffffff') -> Path:
+                   bg: str = '222222') -> Path:
     """Render a proxy preview of the model at ``obj_path`` to ``dst`` (JPEG).
 
     ``textures`` maps each material's *referenced* texture path (as written in the

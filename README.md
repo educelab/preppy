@@ -95,7 +95,7 @@ current hashed URIs. Useful flags:
 | `--uri PREFIX` | absolute-URL prefix for manifest `uri`s |
 | `--prune` | delete hashed assets no longer referenced by a manifest |
 | `--thumbnail-mode {render,texture}` | thumbnail source: a rendered model preview of the default variant (default; needs the `preview` extra, falls back to `texture` if unavailable) or a texture center-crop |
-| `--preview-bg COLOR` | background the rendered preview composites over (hex, `#` optional; default `ffffff`) |
+| `--preview-bg COLOR` | background the rendered preview composites over (hex, `#` optional; default `222222`) |
 | `--keep-tmp` | keep intermediate PNG/KTX2/geometry files |
 
 The default `<prefix>_thumb.jpg` is a **rendered preview of the default variant's

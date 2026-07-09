@@ -315,9 +315,9 @@ def _build_parser() -> argparse.ArgumentParser:
     out_opts.add_argument('--thumbnail-size', type=int, default=512,
                           metavar='INT',
                           help='Square thumbnail edge in px (default: 512)')
-    out_opts.add_argument('--preview-bg', default='ffffff', metavar='COLOR',
+    out_opts.add_argument('--preview-bg', default='222222', metavar='COLOR',
                           help='Background color (hex, # optional) the rendered '
-                               'model preview composites over (default: ffffff)')
+                               'model preview composites over (default: 222222)')
 
     adv_opts = parser.add_argument_group('advanced options')
     adv_opts.add_argument('--keep-tmp', default=False,
