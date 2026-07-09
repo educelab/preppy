@@ -15,7 +15,7 @@ pipeline produces real assets. Each variant is its own self-contained glb.
 ### Tasks
 - [x] Task 1.1: TS project + bundler (Vite/esbuild) in `dri-voyager`; output one
       self-contained ESM/IIFE + transcoder wasm, no runtime CDN.
-- [ ] Task 1.2: `<dri-viewer>` custom-element skeleton with
+- [x] Task 1.2: `<dri-viewer>` custom-element skeleton with
       `manifest`/`variant`/`ui` attributes and a `variant-change` event (carrying
       the variant `id`); CSS sizing.
 - [ ] Task 1.3: Wire GLTFLoader + MeshoptDecoder + KTX2Loader + OrbitControls.
