@@ -9,4 +9,6 @@ playwright-report/
 .playwright/
 # Basis transcoder is vendored out of node_modules at build time (scripts/copy-basis.mjs).
 public/basis/
+# Large sample assets for local dev / e2e verification (not committed).
+public/fixtures/
 *.log

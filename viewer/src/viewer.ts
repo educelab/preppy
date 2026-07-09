@@ -5,14 +5,22 @@
 // switching / measurement build on this in Phase 2+.
 
 import {
+  Box3,
+  BufferGeometry,
   Color,
   HemisphereLight,
   DirectionalLight,
+  Material,
+  Mesh,
+  type Object3D,
   PerspectiveCamera,
   Scene,
+  Sphere,
   SRGBColorSpace,
+  Vector3,
   WebGLRenderer,
 } from 'three';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
@@ -57,6 +65,7 @@ export class Viewer {
   readonly #resizeObserver: ResizeObserver;
   #frame = 0;
   #disposed = false;
+  #currentModel: Object3D | null = null;
 
   constructor(container: HTMLElement, options: ViewerOptions = {}) {
     this.#container = container;
@@ -108,6 +117,105 @@ export class Viewer {
     this.scene.add(fill);
   }
 
+  /** The currently displayed model root (a loaded glb scene), or null. */
+  get currentModel(): Object3D | null {
+    return this.#currentModel;
+  }
+
+  /**
+   * Snapshot of render + camera state, for diagnostics and verification. `triangles`
+   * reflects the last rendered frame; `cameraDistance` is the eye→target distance.
+   */
+  getRenderStats(): {
+    triangles: number;
+    geometries: number;
+    textures: number;
+    meshCount: number;
+    hasTexturedMaterial: boolean;
+    cameraDistance: number;
+  } {
+    let meshCount = 0;
+    let hasTexturedMaterial = false;
+    this.#currentModel?.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh) {
+        return;
+      }
+      meshCount += 1;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (mats.some((m) => m && 'map' in m && (m as { map: unknown }).map)) {
+        hasTexturedMaterial = true;
+      }
+    });
+    return {
+      triangles: this.renderer.info.render.triangles,
+      geometries: this.renderer.info.memory.geometries,
+      textures: this.renderer.info.memory.textures,
+      meshCount,
+      hasTexturedMaterial,
+      cameraDistance: this.camera.position.distanceTo(this.controls.target),
+    };
+  }
+
+  /**
+   * Load a variant's self-contained glb. GLTFLoader transcodes the embedded KTX2 and
+   * applies any `KHR_texture_transform`; we only add the normals the source geometry
+   * lacks. The node transform (gltfpack's KHR_mesh_quantization dequant + registration)
+   * is left on the returned scene graph — never baked into the quantized buffer — so
+   * world coordinates read real scale for measurement.
+   */
+  async loadModel(url: string): Promise<Object3D> {
+    const gltf: GLTF = await this.gltfLoader.loadAsync(url);
+    const root = gltf.scene;
+    root.updateWorldMatrix(true, true);
+    root.traverse((o) => {
+      const mesh = o as Mesh;
+      if (mesh.isMesh) {
+        const geom = mesh.geometry as BufferGeometry;
+        if (!geom.getAttribute('normal')) {
+          geom.computeVertexNormals();
+        }
+      }
+    });
+    return root;
+  }
+
+  /**
+   * Show `root`, removing and disposing the previous model. With `frame: true` the
+   * camera is framed on the new model (initial load only); on a variant switch pass
+   * `frame: false` so the camera/controls are untouched (Phase 3).
+   */
+  setModel(root: Object3D, { frame = false }: { frame?: boolean } = {}): void {
+    if (this.#currentModel && this.#currentModel !== root) {
+      this.scene.remove(this.#currentModel);
+      disposeObject(this.#currentModel);
+    }
+    this.scene.add(root);
+    this.#currentModel = root;
+    if (frame) {
+      this.frameObject(root);
+    }
+  }
+
+  /** Release GPU resources for a model that was loaded but never shown (stale load). */
+  disposeModel(root: Object3D): void {
+    disposeObject(root);
+  }
+
+  /** Frame the camera + controls target on `obj`'s bounding sphere (initial load). */
+  frameObject(obj: Object3D): void {
+    const sphere = new Box3().setFromObject(obj).getBoundingSphere(new Sphere());
+    if (sphere.radius === 0 || !Number.isFinite(sphere.radius)) {
+      return;
+    }
+    this.controls.target.copy(sphere.center);
+    this.camera.position.copy(sphere.center).add(new Vector3(0, 0, sphere.radius * 2.6));
+    this.camera.near = sphere.radius / 100;
+    this.camera.far = sphere.radius * 100;
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+  }
+
   /** Match the renderer + camera to the container's current size. */
   resize(): void {
     const { clientWidth: w, clientHeight: h } = this.#container;
@@ -136,9 +244,35 @@ export class Viewer {
     this.#disposed = true;
     cancelAnimationFrame(this.#frame);
     this.#resizeObserver.disconnect();
+    if (this.#currentModel) {
+      this.scene.remove(this.#currentModel);
+      disposeObject(this.#currentModel);
+      this.#currentModel = null;
+    }
     this.controls.dispose();
     this.ktx2Loader.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
+}
+
+/** Release GPU resources (geometries, materials, textures) held by a model subtree. */
+function disposeObject(root: Object3D): void {
+  root.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) {
+      return;
+    }
+    mesh.geometry?.dispose();
+    const material = mesh.material;
+    const materials: Material[] = Array.isArray(material) ? material : material ? [material] : [];
+    for (const mat of materials) {
+      for (const value of Object.values(mat)) {
+        if (value && typeof value === 'object' && 'isTexture' in value && value.isTexture) {
+          (value as { dispose(): void }).dispose();
+        }
+      }
+      mat.dispose();
+    }
+  });
 }

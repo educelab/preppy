@@ -5,6 +5,12 @@
 // build on the Viewer in Phase 2+.
 
 import { Viewer } from './viewer';
+import {
+  type Manifest,
+  fetchManifest,
+  resolveVariant,
+  resolveVariantUrl,
+} from './manifest';
 
 /** Detail payload of the `variant-change` event. */
 export interface VariantChangeDetail {
@@ -79,6 +85,16 @@ export class DriViewer extends HTMLElement {
   /** The three.js rendering core; null before connect or if WebGL init failed. */
   #viewer: Viewer | null = null;
 
+  /** The active manifest and the base URL its variant `uri`s resolve against. */
+  #manifest: Manifest | null = null;
+  #baseUrl = '';
+  /** Inline manifest set via the `.manifestData` property (bypasses fetching). */
+  #inlineManifest: Manifest | null = null;
+  /** The variant currently shown (guards against reacting to our own attr writes). */
+  #activeVariantId = '';
+  /** Monotonic load generation so a slow load can't clobber a newer one. */
+  #loadToken = 0;
+
   constructor() {
     super();
     const root = this.attachShadow({ mode: 'open' });
@@ -124,6 +140,30 @@ export class DriViewer extends HTMLElement {
     return this.#viewer;
   }
 
+  /** The `id` of the variant currently displayed (empty until one is shown). */
+  get activeVariant(): string {
+    return this.#activeVariantId;
+  }
+
+  /** Render + camera stats for diagnostics / verification; null if not rendering. */
+  getRenderStats(): ReturnType<Viewer['getRenderStats']> | null {
+    return this.#viewer?.getRenderStats() ?? null;
+  }
+
+  /**
+   * The active manifest object. Set this to render an inline / programmatic manifest
+   * without a network fetch (takes precedence over the `manifest` attribute).
+   */
+  get manifestData(): Manifest | null {
+    return this.#manifest;
+  }
+  set manifestData(manifest: Manifest | null) {
+    this.#inlineManifest = manifest;
+    if (this.isConnected) {
+      void this.reload();
+    }
+  }
+
   // --- Lifecycle ------------------------------------------------------------
 
   connectedCallback(): void {
@@ -136,31 +176,106 @@ export class DriViewer extends HTMLElement {
     } catch (error) {
       // No WebGL (or renderer init failed): stay mounted but non-rendering, and let
       // the host react (e.g. show a fallback image).
-      this.dispatchEvent(
-        new CustomEvent('error', {
-          detail: { error },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.emitError(error);
+      return;
     }
-    // Manifest loading is wired in Phase 2 (Task 2.1).
+    void this.reload();
   }
 
   disconnectedCallback(): void {
     this.#viewer?.dispose();
     this.#viewer = null;
+    this.#manifest = null;
+    this.#activeVariantId = '';
   }
 
   attributeChangedCallback(
-    _name: (typeof DriViewer.observedAttributes)[number],
-    _oldValue: string | null,
-    _newValue: string | null,
+    name: (typeof DriViewer.observedAttributes)[number],
+    oldValue: string | null,
+    newValue: string | null,
   ): void {
-    // Attribute-driven reloads are wired in Phase 2/3.
+    if (oldValue === newValue || !this.#viewer) {
+      return;
+    }
+    if (name === 'manifest') {
+      void this.reload();
+    }
+    // `variant` switching (Phase 3) and `ui` (Phase 4) are wired later. In Phase 2 the
+    // initial variant is chosen from the `variant` attribute at load time.
+  }
+
+  // --- Loading --------------------------------------------------------------
+
+  /**
+   * Resolve the active manifest (inline property or `manifest` attribute) and show the
+   * selected variant (the `variant` attribute, else the default), framing the camera.
+   * Safe to call repeatedly; a newer call supersedes an in-flight one.
+   */
+  protected async reload(): Promise<void> {
+    const viewer = this.#viewer;
+    if (!viewer) {
+      return;
+    }
+    const token = ++this.#loadToken;
+    try {
+      if (this.#inlineManifest) {
+        this.#manifest = this.#inlineManifest;
+        this.#baseUrl = document.baseURI;
+      } else if (this.manifest) {
+        const { manifest, baseUrl } = await fetchManifest(this.manifest);
+        if (token !== this.#loadToken) {
+          return;
+        }
+        this.#manifest = manifest;
+        this.#baseUrl = baseUrl;
+      } else {
+        return; // nothing to load yet
+      }
+      await this.showVariant(this.variant || undefined, { frame: true, token });
+    } catch (error) {
+      if (token === this.#loadToken) {
+        this.emitError(error);
+      }
+    }
+  }
+
+  /**
+   * Load and display a variant by `id` (or the manifest default when omitted). `frame`
+   * frames the camera (initial load); the `token` guards against a stale load winning.
+   */
+  protected async showVariant(
+    id: string | undefined,
+    { frame = false, token = this.#loadToken }: { frame?: boolean; token?: number } = {},
+  ): Promise<void> {
+    const viewer = this.#viewer;
+    const manifest = this.#manifest;
+    if (!viewer || !manifest) {
+      return;
+    }
+    const variant = resolveVariant(manifest, id);
+    const url = resolveVariantUrl(variant, this.#baseUrl);
+    const model = await viewer.loadModel(url);
+    if (token !== this.#loadToken) {
+      viewer.disposeModel(model); // superseded — release its GPU resources
+      return;
+    }
+    viewer.setModel(model, { frame });
+    this.#activeVariantId = variant.id;
+    this.emitVariantChange(variant.id);
   }
 
   // --- Events ---------------------------------------------------------------
+
+  /** Dispatch a composed, bubbling `error` event carrying the underlying error. */
+  protected emitError(error: unknown): void {
+    this.dispatchEvent(
+      new CustomEvent('error', {
+        detail: { error },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
 
   /**
    * Dispatch `variant-change` carrying the now-active variant `id`. Bubbles and

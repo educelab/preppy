@@ -15,9 +15,18 @@
 <body>
   <main>
     <h1>&lt;dri-viewer&gt; development host</h1>
-    <!-- The manifest/variant attributes are wired in later phases. -->
-    <dri-viewer></dri-viewer>
+    <dri-viewer id="viewer"></dri-viewer>
   </main>
   <script type="module" src="/src/index.ts"></script>
+  <script type="module">
+    // Dev convenience: drive the widget from query params, e.g.
+    //   /?manifest=/fixtures/PHerc1428Cr04/manifest.json&variant=ir1050
+    const params = new URLSearchParams(location.search);
+    const el = document.getElementById('viewer');
+    const manifest = params.get('manifest');
+    if (manifest) el.setAttribute('manifest', manifest);
+    const variant = params.get('variant');
+    if (variant) el.setAttribute('variant', variant);
+  </script>
 </body>
 </html>

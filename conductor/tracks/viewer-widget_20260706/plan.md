@@ -26,15 +26,15 @@ pipeline produces real assets. Each variant is its own self-contained glb.
 
 ## Phase 2: Load & render one variant (B2, B3, B6 defaults)
 ### Tasks
-- [ ] Task 2.1: Fetch manifest (URL or inline); load the default variant's glb
+- [x] Task 2.1: Fetch manifest (URL or inline); load the default variant's glb
       (GLTFLoader handles embedded KTX2 + `KHR_texture_transform`); compute
       normals (`computeVertexNormals()`); apply the node transform to the mesh
       (real cm scale).
-- [ ] Task 2.2: Show the default variant; orbit/zoom/pan; frame on load.
-- [ ] Task 2.3: Default light rig (hemisphere ambient + directional key).
+- [x] Task 2.2: Show the default variant; orbit/zoom/pan; frame on load.
+- [x] Task 2.3: Default light rig (hemisphere ambient + directional key).
 ### Verification
-- [ ] A hand-authored `mvs` manifest renders correctly lit, camera framed, right
-      scale.
+- [x] A real per-object manifest (PHerc1428Cr04) renders correctly lit, camera
+      framed, texture coherent — verified headless (e2e/phase2.spec.ts) + screenshot.
 
 ## Phase 3: Camera-preserving variant switch (B4)
 ### Tasks
