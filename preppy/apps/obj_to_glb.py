@@ -1,5 +1,6 @@
 import argparse
 import shutil
+import sys
 from pathlib import Path
 
 import PIL.Image
@@ -8,6 +9,10 @@ import preppy.convert as convert
 
 
 def main():
+    print('[deprecated] voyager-obj2glb uses the legacy obj2gltf + gltf-pipeline '
+          'path, which will be removed once the meshopt/KTX2 delivery pipeline '
+          'lands.', file=sys.stderr)
+
     parser = argparse.ArgumentParser(description='Convert .obj to .glb.')
     parser.add_argument('-i', '--input', type=str, metavar='FILE',
                         help='OBJ file path', required=True)

@@ -1,27 +1,16 @@
 [
-    {
-        "obj": "path/to/obj/file01.obj",
-        "stem": "ShortName01",
-        "title": "Long name 1",
-        "titles": {
-            "EN": "Long name (English)"
-          }
-    },
-    {
-        "obj": "path/to/obj/file02.obj",
-        "stem": "ShortName02",
-        "title": "Long name 2",
-        "navTitle": "Nav title"
-    },
-    {
-        "title": "Group name",
-        "documents": [
-            {
-                "obj": "path/to/obj/sub/file03.obj",
-                "stem": "ShortName03",
-                "title": "Group name, item name 3",
-                "navTitle": "Item name 3"
-            }
-        ]
-    }
+  {
+    "id": "ExampleObject01",
+    "title": "Example Object 1",
+    "titles": { "en": "Example Object 1" },
+    "inventory": "INV-001",
+    "description": "A short description of the object.",
+    "credit": "(c) University of Kentucky. All rights reserved.",
+    "date": "2026-01-01",
+    "units": "cm",
+    "variants": [
+      { "suffix": "rgb", "label": "Spectral RGB", "obj": "objs/example01_rgb.obj", "default": true },
+      { "suffix": "ir",  "label": "IR",           "obj": "objs/example01_ir.obj" }
+    ]
+  }
 ]

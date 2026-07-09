@@ -1,0 +1,21 @@
+[
+  {
+    "id": "PHerc1061Cr05",
+    "prefix": "PHerc1061Cr05",
+    "title": "P.Herc. 1061, Cr. 5",
+    "titles": { "en": "P.Herc. 1061, Cr. 5" },
+    "inventory": "P.Herc. 1061",
+    "description": "Spectral capture variants of a Herculaneum papyrus fragment.",
+    "credit": "(c) University of Kentucky. All rights reserved.",
+    "date": "2024-06-26",
+    "units": "cm",
+    "nodataFill": "#FF7F00",
+    "variants": [
+      { "suffix": "rgb",    "label": "Spectral RGB", "obj": "5_spectral_rgb.obj",    "default": true, "nodataFill": null },
+      { "suffix": "ir1050", "label": "IR 1050",      "obj": "5_spectral_ir1050.obj" },
+      { "suffix": "center", "label": "Center",       "obj": "2_center.obj" },
+      { "suffix": "pgs",    "label": "PGS IR940",    "obj": "4_pgs_IR940.obj",
+        "credit": "(c) University of Kentucky", "date": "2024-06-26", "method": "photometric-stereo" }
+    ]
+  }
+]
