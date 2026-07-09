@@ -13,7 +13,7 @@ pipeline produces real assets. Each variant is its own self-contained glb.
 
 ## Phase 1: Scaffolding & stack (B1)
 ### Tasks
-- [ ] Task 1.1: TS project + bundler (Vite/esbuild) in `dri-voyager`; output one
+- [x] Task 1.1: TS project + bundler (Vite/esbuild) in `dri-voyager`; output one
       self-contained ESM/IIFE + transcoder wasm, no runtime CDN.
 - [ ] Task 1.2: `<dri-viewer>` custom-element skeleton with
       `manifest`/`variant`/`ui` attributes and a `variant-change` event (carrying

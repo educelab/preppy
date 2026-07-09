@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>&lt;dri-viewer&gt; — dev host</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #15171c; color: #ddd;
+                 font: 14px/1.5 system-ui, sans-serif; }
+    main { box-sizing: border-box; height: 100%; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    h1 { font-size: 15px; margin: 0; font-weight: 600; }
+    dri-viewer { flex: 1; min-height: 0; width: 100%; border: 1px solid #333; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>&lt;dri-viewer&gt; development host</h1>
+    <!-- The manifest/variant attributes are wired in later phases. -->
+    <dri-viewer></dri-viewer>
+  </main>
+  <script type="module" src="/src/index.ts"></script>
+</body>
+</html>

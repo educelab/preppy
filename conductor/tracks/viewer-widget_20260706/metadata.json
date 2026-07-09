@@ -2,10 +2,13 @@
   "id": "viewer-widget_20260706",
   "title": "<dri-viewer> web component",
   "type": "feature",
-  "status": "pending",
+  "status": "in_progress",
   "created": "2026-07-06T18:56:11Z",
-  "updated": "2026-07-06T18:56:11Z",
+  "updated": "2026-07-09T00:00:00Z",
   "depends_on": ["toolchain-spike_20260706", "delivery-pipeline_20260706"],
+  "current_phase": 1,
+  "current_task": "1.1",
   "phases": { "total": 4, "completed": 0 },
-  "tasks": { "total": 13, "completed": 0 }
+  "tasks": { "total": 13, "completed": 0 },
+  "commits": []
 }
