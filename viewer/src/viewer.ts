@@ -181,20 +181,30 @@ export class Viewer {
   }
 
   /**
-   * Show `root`, removing and disposing the previous model. With `frame: true` the
-   * camera is framed on the new model (initial load only); on a variant switch pass
-   * `frame: false` so the camera/controls are untouched (Phase 3).
+   * Show `root`, removing the previous model from the scene (NOT disposing it — the
+   * caller owns model lifecycle so variants can be cached for instant re-display). With
+   * `frame: true` the camera is framed on the new model (initial load only); a variant
+   * switch passes `frame: false` so the camera/controls are left exactly as the user
+   * left them — the widget's core invariant.
    */
   setModel(root: Object3D, { frame = false }: { frame?: boolean } = {}): void {
     if (this.#currentModel && this.#currentModel !== root) {
       this.scene.remove(this.#currentModel);
-      disposeObject(this.#currentModel);
     }
     this.scene.add(root);
     this.#currentModel = root;
     if (frame) {
       this.frameObject(root);
     }
+  }
+
+  /** Camera + controls state, for the camera-preservation invariant check (Task 3.3). */
+  getCameraState(): { position: number[]; quaternion: number[]; target: number[] } {
+    return {
+      position: this.camera.position.toArray(),
+      quaternion: this.camera.quaternion.toArray(),
+      target: this.controls.target.toArray(),
+    };
   }
 
   /** Release GPU resources for a model that was loaded but never shown (stale load). */
@@ -244,9 +254,10 @@ export class Viewer {
     this.#disposed = true;
     cancelAnimationFrame(this.#frame);
     this.#resizeObserver.disconnect();
+    // Remove (do not dispose) the current model — the caller's cache owns model
+    // lifecycle and disposes every loaded variant on teardown.
     if (this.#currentModel) {
       this.scene.remove(this.#currentModel);
-      disposeObject(this.#currentModel);
       this.#currentModel = null;
     }
     this.controls.dispose();

@@ -38,14 +38,14 @@ pipeline produces real assets. Each variant is its own self-contained glb.
 
 ## Phase 3: Camera-preserving variant switch (B4)
 ### Tasks
-- [ ] Task 3.1: Variant switch — load/show the target variant's glb, add to scene,
+- [x] Task 3.1: Variant switch — load/show the target variant's glb, add to scene,
       remove the previous; **never touch camera/controls**. Select by variant `id`.
-- [ ] Task 3.2: Memory/preload policy — cache loaded variant glbs; KTX2 stays GPU
+- [x] Task 3.2: Memory/preload policy — cache loaded variant glbs; KTX2 stays GPU
       compressed; optional LRU if many large variants; preload others after default.
-- [ ] Task 3.3: Automated check asserting camera state is identical across a switch.
+- [x] Task 3.3: Automated check asserting camera state is identical across a switch.
 ### Verification
-- [ ] Variant switch preserves the camera; several 8K KTX2 variants coexist
-      without OOM on a mid-range profile.
+- [x] Variant switch preserves the camera (numeric + visual, e2e/phase3.spec.ts);
+      all 4 real 8K KTX2 variants coexist resident without OOM / context loss.
 
 ## Phase 4: Measurement, raking light, embedding (B5, B6, B7)
 ### Tasks

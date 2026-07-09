@@ -4,9 +4,11 @@
 // created on connect and disposed on disconnect. Loading, switching, and measurement
 // build on the Viewer in Phase 2+.
 
+import type { Object3D } from 'three';
 import { Viewer } from './viewer';
 import {
   type Manifest,
+  type Variant,
   fetchManifest,
   resolveVariant,
   resolveVariantUrl,
@@ -94,6 +96,14 @@ export class DriViewer extends HTMLElement {
   #activeVariantId = '';
   /** Monotonic load generation so a slow load can't clobber a newer one. */
   #loadToken = 0;
+  /**
+   * Loaded variant models keyed by variant `id`, in LRU order (most-recently-used last).
+   * KTX2 textures stay GPU-compressed here, so switching is instant and the geometry /
+   * texture is not re-fetched. The element owns these models' lifecycle.
+   */
+  readonly #cache = new Map<string, Object3D>();
+  /** Cache cap; 0 (default) keeps every variant resident. See `maxCachedVariants`. */
+  #maxCached = 0;
 
   constructor() {
     super();
@@ -150,6 +160,29 @@ export class DriViewer extends HTMLElement {
     return this.#viewer?.getRenderStats() ?? null;
   }
 
+  /** Camera + controls state, for the camera-preservation check; null if not rendering. */
+  getCameraState(): ReturnType<Viewer['getCameraState']> | null {
+    return this.#viewer?.getCameraState() ?? null;
+  }
+
+  /** Number of variant models currently resident in the cache (diagnostics / tests). */
+  get cachedVariantCount(): number {
+    return this.#cache.size;
+  }
+
+  /**
+   * Max number of variant models kept resident. 0 (default) keeps all variants cached
+   * for instant switching (a handful of 8K KTX2 variants coexist comfortably). Set a
+   * positive cap to LRU-evict when many large variants would otherwise exhaust memory.
+   */
+  get maxCachedVariants(): number {
+    return this.#maxCached;
+  }
+  set maxCachedVariants(value: number) {
+    this.#maxCached = Math.max(0, Math.floor(value));
+    this.#evictIfNeeded(this.#activeVariantId);
+  }
+
   /**
    * The active manifest object. Set this to render an inline / programmatic manifest
    * without a network fetch (takes precedence over the `manifest` attribute).
@@ -183,6 +216,7 @@ export class DriViewer extends HTMLElement {
   }
 
   disconnectedCallback(): void {
+    this.#clearCache();
     this.#viewer?.dispose();
     this.#viewer = null;
     this.#manifest = null;
@@ -199,9 +233,14 @@ export class DriViewer extends HTMLElement {
     }
     if (name === 'manifest') {
       void this.reload();
+    } else if (name === 'variant') {
+      // Switch to the requested variant, preserving the camera. Skip when it already
+      // matches what's shown (e.g. our own reflected write of the resolved default).
+      if (newValue && newValue !== this.#activeVariantId) {
+        void this.switchTo(newValue);
+      }
     }
-    // `variant` switching (Phase 3) and `ui` (Phase 4) are wired later. In Phase 2 the
-    // initial variant is chosen from the `variant` attribute at load time.
+    // `ui` is wired in Phase 4.
   }
 
   // --- Loading --------------------------------------------------------------
@@ -217,6 +256,8 @@ export class DriViewer extends HTMLElement {
       return;
     }
     const token = ++this.#loadToken;
+    // A (re)load implies a (possibly) new manifest — the old variants no longer apply.
+    this.#clearCache();
     try {
       if (this.#inlineManifest) {
         this.#manifest = this.#inlineManifest;
@@ -232,6 +273,7 @@ export class DriViewer extends HTMLElement {
         return; // nothing to load yet
       }
       await this.showVariant(this.variant || undefined, { frame: true, token });
+      this.#preloadOthers(token);
     } catch (error) {
       if (token === this.#loadToken) {
         this.emitError(error);
@@ -240,8 +282,25 @@ export class DriViewer extends HTMLElement {
   }
 
   /**
-   * Load and display a variant by `id` (or the manifest default when omitted). `frame`
-   * frames the camera (initial load); the `token` guards against a stale load winning.
+   * Switch to variant `id`, preserving the camera/controls (frame: false). A newer call
+   * supersedes an in-flight one.
+   */
+  protected async switchTo(id: string): Promise<void> {
+    const token = ++this.#loadToken;
+    try {
+      await this.showVariant(id, { frame: false, token });
+    } catch (error) {
+      if (token === this.#loadToken) {
+        this.emitError(error);
+      }
+    }
+  }
+
+  /**
+   * Load and display a variant by `id` (or the manifest default when omitted), from the
+   * cache when present. `frame` frames the camera (initial load only); `token` guards a
+   * stale load from winning. Reflects the active id to the `variant` attribute and emits
+   * `variant-change`.
    */
   protected async showVariant(
     id: string | undefined,
@@ -253,15 +312,83 @@ export class DriViewer extends HTMLElement {
       return;
     }
     const variant = resolveVariant(manifest, id);
-    const url = resolveVariantUrl(variant, this.#baseUrl);
-    const model = await viewer.loadModel(url);
+    const model = await this.#loadVariantModel(variant);
     if (token !== this.#loadToken) {
-      viewer.disposeModel(model); // superseded — release its GPU resources
-      return;
+      return; // superseded — the model stays cached for a later switch
     }
     viewer.setModel(model, { frame });
     this.#activeVariantId = variant.id;
+    if (this.getAttribute('variant') !== variant.id) {
+      this.setAttribute('variant', variant.id); // reflect for deep-linking (guarded above)
+    }
     this.emitVariantChange(variant.id);
+  }
+
+  // --- Cache / preload ------------------------------------------------------
+
+  /** Return the variant's model from cache (LRU-touched) or load, cache, and evict. */
+  async #loadVariantModel(variant: Variant): Promise<Object3D> {
+    const cached = this.#cache.get(variant.id);
+    if (cached) {
+      this.#cache.delete(variant.id);
+      this.#cache.set(variant.id, cached); // move to MRU end
+      return cached;
+    }
+    const url = resolveVariantUrl(variant, this.#baseUrl);
+    const model = await this.#viewer!.loadModel(url);
+    this.#cache.set(variant.id, model);
+    this.#evictIfNeeded(variant.id);
+    return model;
+  }
+
+  /** Preload the remaining variants into cache after the default is shown (idle-ish). */
+  #preloadOthers(token: number): void {
+    const manifest = this.#manifest;
+    // Only worth preloading when the cache is unbounded enough to hold them.
+    if (!manifest || (this.#maxCached > 0 && this.#maxCached < manifest.variants.length)) {
+      return;
+    }
+    void (async () => {
+      for (const variant of manifest.variants) {
+        if (token !== this.#loadToken || !this.isConnected || this.#cache.has(variant.id)) {
+          if (token !== this.#loadToken || !this.isConnected) {
+            return;
+          }
+          continue;
+        }
+        try {
+          await this.#loadVariantModel(variant);
+        } catch {
+          // Preload is best-effort; a failed variant surfaces if the user selects it.
+        }
+      }
+    })();
+  }
+
+  /** Evict least-recently-used models past the cap, never the active/just-loaded one. */
+  #evictIfNeeded(keepId: string): void {
+    if (this.#maxCached <= 0) {
+      return;
+    }
+    for (const id of [...this.#cache.keys()]) {
+      if (this.#cache.size <= this.#maxCached) {
+        break;
+      }
+      if (id === keepId || id === this.#activeVariantId) {
+        continue;
+      }
+      const model = this.#cache.get(id)!;
+      this.#cache.delete(id);
+      this.#viewer?.disposeModel(model);
+    }
+  }
+
+  /** Dispose and drop every cached model. */
+  #clearCache(): void {
+    for (const model of this.#cache.values()) {
+      this.#viewer?.disposeModel(model);
+    }
+    this.#cache.clear();
   }
 
   // --- Events ---------------------------------------------------------------
