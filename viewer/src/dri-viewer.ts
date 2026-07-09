@@ -1,9 +1,10 @@
 // The <dri-viewer> custom element.
 //
-// Task 1.2 scope: the element skeleton — observed attributes (manifest / variant /
-// ui), reflected properties, CSS sizing via an adopted stylesheet in a shadow root,
-// and the `variant-change` event. The three.js rendering core is wired in Task 1.3
-// (renderer init) and Phase 2+ (loading, switching, measurement).
+// The element owns attributes/events/DOM; the three.js rendering core (Viewer) is
+// created on connect and disposed on disconnect. Loading, switching, and measurement
+// build on the Viewer in Phase 2+.
+
+import { Viewer } from './viewer';
 
 /** Detail payload of the `variant-change` event. */
 export interface VariantChangeDetail {
@@ -75,6 +76,9 @@ export class DriViewer extends HTMLElement {
   /** Container for the renderer canvas and any UI overlays. */
   readonly #stage: HTMLDivElement;
 
+  /** The three.js rendering core; null before connect or if WebGL init failed. */
+  #viewer: Viewer | null = null;
+
   constructor() {
     super();
     const root = this.attachShadow({ mode: 'open' });
@@ -115,14 +119,37 @@ export class DriViewer extends HTMLElement {
     return this.#stage;
   }
 
+  /** The rendering core, or null if not connected / WebGL unavailable. */
+  protected get viewer(): Viewer | null {
+    return this.#viewer;
+  }
+
   // --- Lifecycle ------------------------------------------------------------
 
   connectedCallback(): void {
-    // Renderer init and manifest loading are wired in Task 1.3 / Phase 2.
+    if (this.#viewer) {
+      return;
+    }
+    try {
+      const transcoderPath = this.getAttribute('transcoder-path') ?? undefined;
+      this.#viewer = new Viewer(this.#stage, { transcoderPath });
+    } catch (error) {
+      // No WebGL (or renderer init failed): stay mounted but non-rendering, and let
+      // the host react (e.g. show a fallback image).
+      this.dispatchEvent(
+        new CustomEvent('error', {
+          detail: { error },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
+    // Manifest loading is wired in Phase 2 (Task 2.1).
   }
 
   disconnectedCallback(): void {
-    // Renderer teardown is wired in Task 1.3.
+    this.#viewer?.dispose();
+    this.#viewer = null;
   }
 
   attributeChangedCallback(

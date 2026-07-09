@@ -18,9 +18,11 @@ pipeline produces real assets. Each variant is its own self-contained glb.
 - [x] Task 1.2: `<dri-viewer>` custom-element skeleton with
       `manifest`/`variant`/`ui` attributes and a `variant-change` event (carrying
       the variant `id`); CSS sizing.
-- [ ] Task 1.3: Wire GLTFLoader + MeshoptDecoder + KTX2Loader + OrbitControls.
+- [x] Task 1.3: Wire GLTFLoader + MeshoptDecoder + KTX2Loader + OrbitControls.
 ### Verification
-- [ ] Empty widget mounts, sizes via CSS, and initializes the renderer.
+- [~] Empty widget mounts, sizes via CSS, and initializes the renderer.
+      (mount + sizing + guarded init unit-tested in happy-dom; real-WebGL renderer
+      init pending a browser check — tooling decision at the Phase 1 checkpoint.)
 
 ## Phase 2: Load & render one variant (B2, B3, B6 defaults)
 ### Tasks
