@@ -3,7 +3,7 @@
 **Track ID:** delivery-pipeline_20260706
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-07-06
-**Status:** [ ] Not Started (revised 2026-07-07)
+**Status:** [x] Complete (closed out 2026-07-09)
 
 ## Overview
 Validate the untested multi-material path first, then build bottom-up:
@@ -34,8 +34,11 @@ self-contained glb.
 - [x] Task 1.3: Mark `obj2gltf`/`gltf-pipeline` path deprecated (keep old
       entrypoint working until the new one lands).
 ### Verification
-- [ ] Fresh install exposes console scripts; tool detection reports clearly when
+- [x] Fresh install exposes console scripts; tool detection reports clearly when
       `ktx`/`gltfpack`/`gltf-transform` are missing (and if `ktx < v5`).
+      **PASS** — `voyager-check-tools` reports every tool with version + path,
+      shows the `ktx [needs >= 5.0.0]` / `node [needs >= 20.0.0]` gates, the embed
+      helper deps, and the optional model-preview GL backend.
 
 ## Phase 2: Leaf modules (A2)
 ### Tasks
@@ -69,12 +72,13 @@ self-contained glb.
       `manifest.json` + thumb; `--hash-names` (default on), `--uri` prefixing.
       (Thumbnail is Task 4.3; layout/hashing/uri done here.)
 ### Verification
-- [~] Full `mvs` run yields a per-object manifest + one self-contained glb per
+- [x] Full `mvs` run yields a per-object manifest + one self-contained glb per
       variant; assets load and switch (camera-preserving) in the spike page.
-      **Mechanical PASS** — synthetic multi-variant run emits the A4 layout
+      **PASS** — synthetic multi-variant run emits the A4 layout
       (`out/<prefix>/manifest.json` + `<prefix>_<suffix>.<hash>.glb` + `index.json`),
       manifest matches the spec (single default, overrides, `units:cm`), and each
-      glb keeps all four extensions. Real-`mvs` render/switch is the operator gate.
+      glb keeps all four extensions. Real-`mvs` render/switch **operator-confirmed**
+      (sign-off 2026-07-09).
 
 ## Phase 4: Input schema, CLI, thumbnails (A1, A5, A6)
 ### Tasks
@@ -95,17 +99,29 @@ self-contained glb.
       set end-to-end on a trimmed multi-material sample.
 
 ## Final Verification
-- [~] All acceptance criteria met on real `mvs` data. Mechanically met on
-      synthetic/trimmed data (see below); **real-`mvs` render/switch is the
-      operator gate**. Hausdorff decimation gating is now wired
+- [x] All acceptance criteria met on real `mvs` data. **Operator-confirmed
+      2026-07-09.** Hausdorff decimation gating is wired
       (`--validate`/`--deviation-budget`: plain re-pack + pymeshlab check, fails
-      over budget) — no longer deferred.
-- [x] Unit + smoke tests passing (63/63); `voyager-preppy -h` green;
-      `voyager-check-tools` reports the full toolchain OK.
+      over budget).
+- [x] Unit + smoke tests passing (91/91); `voyager-preppy -h` green;
+      `voyager-check-tools` reports the full toolchain OK (incl. optional
+      model-preview GL backend).
 - [x] `tech-stack.md` / README updated for the new toolchain.
-- [x] Ready for review — MR !7 open into `develop`
+- [x] Ready for review — MR !7 into `develop`
       (https://gitlab.com/educelab/dri-voyager-preppy/-/merge_requests/7).
-      Track stays in_progress pending real-`mvs` operator sign-off + merge.
+
+## Post-plan work (not in the original task list; landed on the branch)
+These shipped after the plan was written and are covered by the test suite (91 tests):
+- **Rendered model-preview thumbnail** (`preview.py`) — trimesh+pyrender proxy
+  render of the default variant for `<prefix>_thumb.jpg`, with a texture-crop
+  fallback (`--thumbnail-mode texture`) when the GL backend is unavailable;
+  `--preview-bg` (default `222222`). Optional `.[preview]` extra.
+- **`nodataFill` hang fix** — in-memory nearest-valid-pixel fill on the downsized
+  image (`texture.fill_nodata`), replacing the full-res ImageMagick dilate that
+  hung on gigapixel textures.
+- **Relative `obj` paths** resolve against `--data-root` (default CWD).
+- **Removed** the `--opaque` defensive alpha fix (handled upstream).
+- **tqdm progress bars** kept clean (logging + captured subprocess output).
 
 ---
 
