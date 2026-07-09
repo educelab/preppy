@@ -1,6 +1,16 @@
+"""Legacy OBJ -> Draco-compressed GLB converter (``obj2gltf`` + ``gltf-pipeline``).
+
+.. deprecated::
+    This path is superseded by the meshopt-geometry + KTX2 delivery pipeline
+    (``texture.py`` / ``geometry.py`` / ``assemble.py``). It is kept working
+    during the transition and will be removed once the new pipeline lands. New
+    code should not depend on :func:`obj_to_glb`.
+"""
+
 import platform
 import shutil
 import subprocess as sp
+import warnings
 from pathlib import Path
 from typing import Union
 
@@ -95,7 +105,17 @@ def obj_to_glb(obj_file: Union[str, Path], glb_file: Union[str, Path],
         obj_file: Path to obj file
         glb_file: Path to output glb file
         compress: If True, convert apply DRACO compression
+
+    .. deprecated::
+        The ``obj2gltf`` + ``gltf-pipeline`` path is being replaced by the
+        meshopt geometry + KTX2 delivery pipeline. Kept working during the
+        transition; will be removed once the new pipeline lands.
     """
+    warnings.warn(
+        'obj_to_glb (obj2gltf + gltf-pipeline) is deprecated and will be '
+        'removed once the meshopt/KTX2 delivery pipeline lands.',
+        DeprecationWarning, stacklevel=2)
+
     is_windows = platform.system() == 'Windows'
 
     # Convert to glb

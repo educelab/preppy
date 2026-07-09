@@ -21,16 +21,34 @@ From: python:3.11-slim
       nano \
       tzdata \
       vim \
-      imagemagick
+      imagemagick \
+      libosmesa6 \
+      libgl1
 
   # Install nodejs
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
       nodejs
   node -v
 
-  # Install the other deps using node
-  npm install -g obj2gltf gltf-pipeline
+  # Install KTX-Software (>= v5, provides `ktx create`). toktx was removed in v5.
+  # Pin a v5 release .deb; update KTX_VERSION / asset name from
+  # https://github.com/KhronosGroup/KTX-Software/releases as needed.
+  KTX_VERSION=5.0.0
+  curl -fsSL -o /tmp/ktx.deb \
+      "https://github.com/KhronosGroup/KTX-Software/releases/download/v${KTX_VERSION}/KTX-Software-${KTX_VERSION}-Linux-x86_64.deb"
+  DEBIAN_FRONTEND=noninteractive apt install -y /tmp/ktx.deb
+  rm -f /tmp/ktx.deb
+  ktx --version
+
+  # Install the node-based tools.
+  # New delivery toolchain: gltfpack (geometry). The KTX2 embed step uses a
+  # bundled Node helper (preppy/node/embed.mjs) whose deps are installed below.
+  # obj2gltf/gltf-pipeline are the deprecated legacy path, kept until it is removed.
+  npm install -g gltfpack obj2gltf gltf-pipeline
+
+  # Install the embed helper's npm deps (@gltf-transform/core + meshoptimizer)
+  npm install --prefix /usr/local/educelab/dri-voyager-preppy/preppy/node
 
   # Create a venv for this project
   python3 -m venv /usr/local/educelab/dri-voyager-preppy/.venv/
@@ -41,8 +59,11 @@ From: python:3.11-slim
   # Update pip
   python3 -m pip install --upgrade pip wheel setuptools
 
-  # Install preppy
-  python3 -m pip install --editable /usr/local/educelab/dri-voyager-preppy
+  # Install preppy with the preview extra (trimesh + pyrender) so the default
+  # thumbnail is a rendered model preview. pyrender renders offscreen via OSMesa
+  # (libosmesa6, above) with PYOPENGL_PLATFORM=osmesa set in %environment; if the
+  # GL backend fails on a given node the thumbnail falls back to a texture crop.
+  python3 -m pip install --editable '/usr/local/educelab/dri-voyager-preppy[preview]'
 
   # Make writable
   echo "Cleaning up installation directory..."
@@ -50,6 +71,10 @@ From: python:3.11-slim
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
   git config --global --add safe.directory /usr/local/educelab/dri-voyager-preppy/
+
+%environment
+  # Headless offscreen GL backend for the pyrender model-preview thumbnail.
+  export PYOPENGL_PLATFORM=osmesa
 
 %runscript
 #!/bin/bash
