@@ -4,47 +4,69 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-DRI Voyager Preppy prepares textured OBJ meshes for display in [Smithsonian Voyager](https://smithsonian.github.io/dpo-voyager/). It converts OBJs to Draco-compressed GLBs, normalizes their texture images, and emits the Voyager scene descriptors (`*.svx.json`) and navigation manifest (`items.json`) that a Voyager deployment consumes.
+DRI Voyager Preppy turns source OBJs + textures into web-ready 3D assets for the custom `<dri-viewer>` web component. Each imaged object has several **variants** (RGB, IR, PGS, …); the pipeline emits **one self-contained `.glb` per variant** (meshopt-compressed geometry with its KTX2 texture(s) embedded) plus a viewer-native per-object **`manifest.json`** and an optional top-level `index.json`.
+
+This replaced the original Smithsonian-Voyager path (`.svx.json` scene descriptors + `items.json`, via `obj2gltf` + `gltf-pipeline`). That legacy path survives only as the deprecated `voyager-obj2glb` tool (`convert.py`).
 
 ## External dependencies (not pip-installable)
 
-The core work is done by shelling out to CLI tools that must be on `PATH`:
+The pipeline shells out to CLI tools that must be on `PATH` (see README for install; `tools.py` detects them, `voyager-check-tools` reports status). npm-installed CLIs are invoked as `<name>.cmd` on Windows (`platform.system()` check in `tools.py`).
 
-- **ImageMagick** (`mogrify`) — resize/re-encode textures. `brew install imagemagick`
-- **Node** tools — `npm install -g obj2gltf gltf-pipeline` (`obj2gltf` does OBJ→GLB, `gltf-pipeline` applies Draco). On Windows these are invoked as `obj2gltf.cmd` / `gltf-pipeline.cmd` (see `platform.system()` check in `convert.py`).
+- **ImageMagick** (`magick`/`mogrify`) — normalize textures to 8-bit sRGB; crop thumbnails.
+- **`ktx`** (KTX-Software **≥ v5**, `ktx create` — `toktx` was removed in v5) — KTX2/Basis encoding.
+- **`gltfpack`** (meshoptimizer) — OBJ → decimated, meshopt-compressed geometry glb.
+- **`node`** (20+) + the bundled `@gltf-transform/core` helper (`preppy/node/embed.mjs`) — embeds KTX2 into the geometry glb. Install its deps once: `npm install --prefix preppy/node`.
+- Legacy only: `obj2gltf` + `gltf-pipeline` (for `voyager-obj2glb`).
+- Optional: `pymeshlab` (`.[validate]`) for the Hausdorff decimation gate.
+- Optional: `trimesh` + `pyrender` (`.[preview]`) for the rendered model-preview thumbnail (`preview.py`). Needs an offscreen GL backend; when absent the thumbnail falls back to a texture center-crop.
 
-Python deps (`natsort`, `Pillow`, `tqdm`) install via `pip install .`.
+Python deps (`natsort`, `Pillow`, `numpy`, `scipy`, `tqdm`) install via `pip install .`. `numpy`/`scipy` power the in-memory no-data fill (`texture.fill_nodata`).
 
 ## Commands
 
 ```bash
-pip install -e .                    # editable install; exposes the three console scripts
+pip install -e '.[validate,test]'       # editable install + optional pymeshlab/pytest
+npm install --prefix preppy/node        # KTX2 embed helper deps (once)
 
-voyager-preppy -i input.json -o out/    # batch: OBJs → GLBs + scene JSON + items.json
-voyager-obj2glb -i mesh.obj -o mesh.glb  # single OBJ → GLB
-voyager-merge-items a/items.json b/items.json -o merged.json  # combine/dedupe manifests
+voyager-preppy -i config.json -o out/   # batch: variants → self-contained glbs + manifest.json + index.json
+voyager-check-tools                     # report external toolchain status
+voyager-obj2glb -i mesh.obj -o mesh.glb # LEGACY single OBJ → Draco GLB (deprecated)
+voyager-merge-items a.json b.json -o merged.json  # LEGACY items.json merge (deprecated)
 ```
 
-There is **no test suite**. CI (`.gitlab-ci.yml`) only smoke-tests that `voyager-preppy -h` runs after install on Python 3.9/3.10. To verify changes, run the console scripts against a real OBJ.
-
-The `singularity/dri-voyager-preppy.def` builds a container (`singularity build ...`) bundling all deps; use it for reproducible/HPC runs.
+There **is** a test suite now (`tests/`, pytest): `python -m pytest tests/`. Tests that need the external tools (or pymeshlab) skip cleanly when they're absent, so a bare run still covers the pure logic. CI (`.gitlab-ci.yml`) smoke-tests `voyager-preppy -h`. The `singularity/dri-voyager-preppy.def` bundles all deps for reproducible/HPC runs.
 
 ## Architecture
 
-Three entrypoints in `preppy/apps/` are thin argparse CLIs over the library modules in `preppy/`:
+Console entrypoints in `preppy/apps/` are thin argparse CLIs over the library modules in `preppy/`. Leaf modules factor command-building into pure `*_cmd` helpers so they unit-test without the tools installed.
 
-- **`preppy/obj_helpers.py`** — `parse_materials()` mmap-scans an OBJ for `mtllib` references, then each `.mtl` for `map_Kd` texture paths. Returns `{mtl_name: {'images': [...]}}`. OBJs are large, hence mmap.
-- **`preppy/convert.py`** — the conversion core.
-  - `prep_obj()`: decides whether textures need work. If every image already matches the target format and is under `img_dim`, it returns the **original** OBJ path untouched (no temp files). Otherwise it copies OBJ+MTLs+images into `tmp_dir`, runs `mogrify` to convert/resize, rewrites the MTL `map_Kd` extensions to match, and returns the temp OBJ path.
-  - `obj_to_glb()`: runs `obj2gltf`, then (if `compress`) `gltf-pipeline` with fixed Draco quantization settings.
-- **`preppy/voyager.py`** — `default_scene()` returns the Voyager `.svx.json` skeleton dict that `file_prep.py` fills in per model.
-- **`preppy/apps/file_prep.py`** — orchestrator. Reads the input config, and for each model calls `prep_obj` → `obj_to_glb` → `generate_voyager_scene`, writing one `<stem>.svx.json` per model plus a top-level `items.json` navigation manifest. Output layout: `out/glb/*.glb`, `out/*.svx.json`, `out/items.json`, `out/tmp/` (deleted unless `--keep-tmp`).
+- **`obj_helpers.py`** — `parse_materials()` (mtllib → `map_Kd`, mmap-scanned) and `parse_material_textures()` which maps each `newmtl` **name** → resolved texture path. Name-keying is essential: gltfpack orders materials by MTL declaration, not numeric name, so the embed matches by name (Phase 0 finding F1).
+- **`texture.py`** — `normalize()` (ImageMagick `magick`: CIELab/16-bit → 8-bit sRGB, resize `>max_dim`), `fill_nodata()` (in-memory Pillow+numpy+scipy nearest-valid-pixel back-fill over a `nodata_fill` color, run on the *downsized* image via `distance_transform_edt` — replaced an ImageMagick `-morphology Dilate` that ran at full source resolution and hung on gigapixel textures; `nodataFill` hex may omit the leading `#`), `encode_ktx2()` (`ktx create`, mips, ETC1S|UASTC), `thumbnail()` (center-crop).
+- **`geometry.py`** — `obj_to_geometry_glb()` (gltfpack `-si` decimation + `-cc` meshopt; UVs kept "used" or the atlas scrambles; **normals computed in the viewer**, not baked) and `validate()` (Hausdorff vs a budget via pymeshlab — needs a *plain* glb; it refuses a meshopt one, which segfaults pymeshlab).
+- **`assemble.py`** — `embed()` runs the bundled Node helper to swap each material's baseColorTexture for its KTX2 (`KHR_texture_basisu`), preserving `EXT_meshopt_compression` (only if the meshopt encoder is registered — F3) and `KHR_texture_transform`.
+- **`preview.py`** — `render_preview()` renders a **proxy model preview** for the default-variant thumbnail (trimesh loads the OBJ + computes normals; pyrender renders one offscreen 3/4-view frame). A `FilePathResolver` subclass swaps the OBJ's `map_Kd` names for the already-normalized PNGs, so the raw (possibly gigapixel) sources are never decoded. It renders the OBJ, **not** the delivered meshopt/KTX2 glb (no offline renderer reads those) — recognizable, not pixel-identical. Raises `PreviewUnavailable` when the toolchain/GL backend is missing so the orchestrator falls back to the texture crop. Gotcha: these OBJs mix `f v/vt` and bare `f v` faces, so trimesh's "mixed data" fallback drops UVs for the whole mesh (and pyrender then compile-fails on a shader sampling a compiled-out `uv_0`); `_recover_uv_by_index` rebuilds `uv[i]=vt[i]` from the file (validated: one `vt` per vertex, matching `v/vt` indices, `process=False` keeps file order), else the model renders untextured.
+- **`cache.py`** — content hash over **inputs + config + tool versions** (never the output glb — basis encoding is non-deterministic), `hashed_name()`, and `prune()`.
+- **`manifest.py`** (replaced `voyager.py`) — pure builders for the per-object `manifest.json` (flat `variants[] {id,label,uri,default}` + object metadata, `units:"cm"`, per-variant overrides) and the optional `index.json`.
+- **`apps/file_prep.py`** — the orchestrator. Per object, per **variant** (no grouping): resolve texture(s) → normalize + encode each → gltfpack → optional Hausdorff gate → embed all by name → one self-contained glb → manifest entry. Emits `manifest.json` per object + a top-level `index.json`. The default-variant thumbnail is a rendered model preview (`preview.render_preview`, `_render_thumbnail` helper) that falls back to a texture crop (`--thumbnail-mode texture`, or automatically when the render toolchain is unavailable).
+- **`convert.py` + `apps/obj_to_glb.py`** — the deprecated legacy OBJ→Draco-GLB path (kept until removed).
 
 ### Input config format
 
-The `voyager-preppy` input JSON is an array of **documents** and/or **document groups**, validated by `templates/prep-models.schema.json` (example in `templates/prep-models-example.json`):
+The `voyager-preppy` input JSON is a flat array of **objects**, validated by `templates/prep-models.schema.json` (examples: `prep-models-example.json`, `mvs-example.json`):
 
-- A **document** needs `obj`, `stem` (unique short name, used for output filenames), and `title`. Optional `navTitle` (nav-menu label) and `titles` (locale dict).
-- A **document group** has a `title` and a `documents` array; groups become nested `subitems` in `items.json`.
+- An **object** needs `id`, `title`, and a `variants` array. Optional `prefix` (output folder/file prefix; defaults to `id`), `titles`, `inventory`, `description`, `credit`, `date`, `units` (default `cm`), `nodataFill`.
+- A **variant** needs `suffix` (stable key: names the file + is the manifest variant `id`) and `obj`. Optional `label`, `default`, `nodataFill` (resolved variant ?? object ?? CLI), and per-variant `credit`/`date`/`method`/`description`. Textures are resolved transitively from the OBJ's `map_Kd`. Relative `obj` paths resolve against `--data-root` (default CWD), not the config file's location.
 
-`merge_items.py` combines multiple `items.json` files: dedupes by title (groups keyed `<title>G`, singles `<title>S`), merges group `subitems`, and natsorts by `title` or `document`.
+### Output layout
+
+```
+out/
+  index.json                          # optional host archive listing
+  <prefix>/
+    manifest.json                     # the scene <dri-viewer> loads (holds hashed uris)
+    <prefix>_<suffix>.<hash>.glb      # one self-contained glb per variant (--hash-names default on)
+    <prefix>_thumb.jpg                # default-variant thumbnail (rendered model preview; texture-crop fallback)
+  tmp/                                # intermediates (deleted unless --keep-tmp)
+```
+
+Hashed asset names are served `immutable`; `manifest.json`/`index.json` keep stable names and are revalidated. `--no-hash-names` gives stable asset names; `--prune` drops unreferenced hashed assets; `--uri` prefixes manifest URIs for absolute-URL hosts.

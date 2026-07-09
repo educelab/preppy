@@ -2,10 +2,14 @@
   "id": "delivery-pipeline_20260706",
   "title": "Delivery pipeline (meshopt geometry + KTX2 + manifest)",
   "type": "feature",
-  "status": "pending",
+  "status": "complete",
   "created": "2026-07-06T18:56:11Z",
-  "updated": "2026-07-06T18:56:11Z",
+  "updated": "2026-07-09T00:00:00Z",
   "depends_on": ["toolchain-spike_20260706"],
-  "phases": { "total": 4, "completed": 0 },
-  "tasks": { "total": 13, "completed": 0 }
+  "current_phase": 5,
+  "current_task": "final-verification",
+  "phases": { "total": 5, "completed": 5 },
+  "tasks": { "total": 15, "completed": 15 },
+  "merge_request": "https://gitlab.com/educelab/dri-voyager-preppy/-/merge_requests/7",
+  "commits": []
 }

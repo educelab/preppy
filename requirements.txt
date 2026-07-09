@@ -1,3 +1,8 @@
+# Runtime Python dependencies. The pipeline also requires several external CLI
+# tools on PATH (mogrify, ktx>=v5, gltfpack, gltf-transform) — see README.
 natsort
 Pillow
 tqdm
+
+# Optional: Hausdorff validation of decimated geometry (or `pip install .[validate]`)
+# pymeshlab
