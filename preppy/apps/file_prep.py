@@ -39,7 +39,7 @@ from typing import Dict, List, Mapping, Optional
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from preppy import assemble, cache, geometry, manifest, texture, tools
+from preppy import assemble, cache, geometry, manifest, preview, texture, tools
 from preppy.geometry import DEFAULT_TARGET_ERROR
 from preppy.obj_helpers import _mtllibs, parse_material_textures
 
@@ -111,15 +111,18 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
 
     nodata = resolve_nodata_fill(variant, object_cfg, opts.nodata_fill)
 
-    # 2. Per texture: normalize -> KTX2. Keep the first normalized PNG as the
-    #    thumbnail source (used only if this is the default variant).
+    # 2. Per texture: normalize -> KTX2. Keep each material's normalized PNG
+    #    (keyed by its *referenced* texture basename) so the default variant can
+    #    render a model preview from the normalized images, not the raw sources.
     ktx2_by_material: Dict[str, Path] = {}
+    normalized_by_ref: Dict[str, Path] = {}
     thumb_src: Optional[Path] = None
     for name, img in ktx2_textures.items():
         png = texture.normalize(img, tmp_dir=var_tmp, max_dim=opts.max_dim,
                                 nodata_fill=nodata)
         if thumb_src is None:
             thumb_src = png
+        normalized_by_ref[Path(img).name] = png
         ktx2_by_material[name] = texture.encode_ktx2(
             png, dst=var_tmp / f'{name}.ktx2', mode=opts.ktx2_mode)
 
@@ -158,7 +161,36 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     assemble.embed(geom, ktx2_by_material, obj_out_dir / name)
 
     return {'suffix': suffix, 'name': name, 'uri': f'{opts.uri}{name}',
-            'thumb_src': thumb_src}
+            'thumb_src': thumb_src, 'obj_path': obj_path,
+            'preview_textures': normalized_by_ref}
+
+
+def _render_thumbnail(result: Mapping, dst: Path,
+                      opts: argparse.Namespace) -> bool:
+    """Write the default variant's thumbnail to ``dst``; return whether it wrote.
+
+    Renders a model preview (``preview.render_preview``) unless ``--thumbnail-mode
+    texture`` was given; on any preview failure (toolchain missing or headless-GL
+    error) it logs and falls back to the texture center-crop so a run never dies
+    for want of a thumbnail.
+    """
+    if opts.thumbnail_mode != 'texture':
+        try:
+            preview.render_preview(
+                result['obj_path'], result['preview_textures'], dst,
+                size=opts.thumbnail_size, bg=opts.preview_bg)
+            return True
+        except preview.PreviewUnavailable as e:
+            log.warning('  model preview unavailable (%s); '
+                        'falling back to texture crop', e)
+        except Exception as e:  # a bad mesh shouldn't abort the whole run
+            log.warning('  model preview failed (%s); '
+                        'falling back to texture crop', e)
+
+    if result['thumb_src'] is None:
+        return False
+    texture.thumbnail(result['thumb_src'], dst, size=opts.thumbnail_size)
+    return True
 
 
 def process_object(object_cfg: Mapping, *, data_root: Path, out_dir: Path,
@@ -182,7 +214,7 @@ def process_object(object_cfg: Mapping, *, data_root: Path, out_dir: Path,
 
     entries = []
     asset_names = []
-    default_thumb_src = None
+    default_result = None
     for i, variant in enumerate(variants):
         if progress is not None:
             progress.set_description_str(variant.get('label', variant['suffix']))
@@ -193,21 +225,22 @@ def process_object(object_cfg: Mapping, *, data_root: Path, out_dir: Path,
             variant, result['uri'], default=(i == default_idx)))
         asset_names.append(result['name'])
         if i == default_idx:
-            default_thumb_src = result['thumb_src']
+            default_result = result
         if progress is not None:
             progress.update()
 
     man = manifest.build_manifest(object_cfg, entries)
     manifest.write_json(man, obj_out_dir / 'manifest.json')
 
-    # Thumbnail: a downscaled center-crop of the default variant's texture (A5).
+    # Thumbnail of the default variant: a rendered *model* preview when the
+    # optional render toolchain is available, else a texture center-crop (A5).
     thumb_rel = None
-    if opts.thumbnails and default_thumb_src is not None:
+    if opts.thumbnails and default_result is not None:
         thumb_name = f'{prefix}_thumb.jpg'
-        texture.thumbnail(default_thumb_src, obj_out_dir / thumb_name,
-                          size=opts.thumbnail_size)
-        thumb_rel = f'{prefix}/{thumb_name}'
-        asset_names.append(thumb_name)
+        thumb_path = obj_out_dir / thumb_name
+        if _render_thumbnail(default_result, thumb_path, opts):
+            thumb_rel = f'{prefix}/{thumb_name}'
+            asset_names.append(thumb_name)
 
     if opts.prune:
         removed = cache.prune(obj_out_dir, keep=asset_names)
@@ -271,11 +304,20 @@ def _build_parser() -> argparse.ArgumentParser:
                                'object folder no longer referenced by its manifest')
     out_opts.add_argument('--thumbnails', default=True,
                           action=argparse.BooleanOptionalAction,
-                          help='Emit a <prefix>_thumb.jpg per object (cropped '
-                               'from the default variant texture). Default: on.')
+                          help='Emit a <prefix>_thumb.jpg per object (from the '
+                               'default variant). Default: on.')
+    out_opts.add_argument('--thumbnail-mode', choices=['render', 'texture'],
+                          default='render',
+                          help="Thumbnail source: 'render' a model preview of "
+                               "the default variant (needs the 'preview' extra; "
+                               "falls back to 'texture' if unavailable), or a "
+                               "'texture' center-crop. Default: render.")
     out_opts.add_argument('--thumbnail-size', type=int, default=512,
                           metavar='INT',
                           help='Square thumbnail edge in px (default: 512)')
+    out_opts.add_argument('--preview-bg', default='ffffff', metavar='COLOR',
+                          help='Background color (hex, # optional) the rendered '
+                               'model preview composites over (default: ffffff)')
 
     adv_opts = parser.add_argument_group('advanced options')
     adv_opts.add_argument('--keep-tmp', default=False,

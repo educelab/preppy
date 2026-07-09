@@ -18,6 +18,7 @@ The pipeline shells out to CLI tools that must be on `PATH` (see README for inst
 - **`node`** (20+) + the bundled `@gltf-transform/core` helper (`preppy/node/embed.mjs`) — embeds KTX2 into the geometry glb. Install its deps once: `npm install --prefix preppy/node`.
 - Legacy only: `obj2gltf` + `gltf-pipeline` (for `voyager-obj2glb`).
 - Optional: `pymeshlab` (`.[validate]`) for the Hausdorff decimation gate.
+- Optional: `trimesh` + `pyrender` (`.[preview]`) for the rendered model-preview thumbnail (`preview.py`). Needs an offscreen GL backend; when absent the thumbnail falls back to a texture center-crop.
 
 Python deps (`natsort`, `Pillow`, `numpy`, `scipy`, `tqdm`) install via `pip install .`. `numpy`/`scipy` power the in-memory no-data fill (`texture.fill_nodata`).
 
@@ -43,9 +44,10 @@ Console entrypoints in `preppy/apps/` are thin argparse CLIs over the library mo
 - **`texture.py`** — `normalize()` (ImageMagick `magick`: CIELab/16-bit → 8-bit sRGB, resize `>max_dim`), `fill_nodata()` (in-memory Pillow+numpy+scipy nearest-valid-pixel back-fill over a `nodata_fill` color, run on the *downsized* image via `distance_transform_edt` — replaced an ImageMagick `-morphology Dilate` that ran at full source resolution and hung on gigapixel textures; `nodataFill` hex may omit the leading `#`), `encode_ktx2()` (`ktx create`, mips, ETC1S|UASTC), `thumbnail()` (center-crop).
 - **`geometry.py`** — `obj_to_geometry_glb()` (gltfpack `-si` decimation + `-cc` meshopt; UVs kept "used" or the atlas scrambles; **normals computed in the viewer**, not baked) and `validate()` (Hausdorff vs a budget via pymeshlab — needs a *plain* glb; it refuses a meshopt one, which segfaults pymeshlab).
 - **`assemble.py`** — `embed()` runs the bundled Node helper to swap each material's baseColorTexture for its KTX2 (`KHR_texture_basisu`), preserving `EXT_meshopt_compression` (only if the meshopt encoder is registered — F3) and `KHR_texture_transform`.
+- **`preview.py`** — `render_preview()` renders a **proxy model preview** for the default-variant thumbnail (trimesh loads the OBJ + computes normals; pyrender renders one offscreen 3/4-view frame). A `FilePathResolver` subclass swaps the OBJ's `map_Kd` names for the already-normalized PNGs, so the raw (possibly gigapixel) sources are never decoded. It renders the OBJ, **not** the delivered meshopt/KTX2 glb (no offline renderer reads those) — recognizable, not pixel-identical. Raises `PreviewUnavailable` when the toolchain/GL backend is missing so the orchestrator falls back to the texture crop.
 - **`cache.py`** — content hash over **inputs + config + tool versions** (never the output glb — basis encoding is non-deterministic), `hashed_name()`, and `prune()`.
 - **`manifest.py`** (replaced `voyager.py`) — pure builders for the per-object `manifest.json` (flat `variants[] {id,label,uri,default}` + object metadata, `units:"cm"`, per-variant overrides) and the optional `index.json`.
-- **`apps/file_prep.py`** — the orchestrator. Per object, per **variant** (no grouping): resolve texture(s) → normalize + encode each → gltfpack → optional Hausdorff gate → embed all by name → one self-contained glb → manifest entry. Emits `manifest.json` per object + a top-level `index.json`.
+- **`apps/file_prep.py`** — the orchestrator. Per object, per **variant** (no grouping): resolve texture(s) → normalize + encode each → gltfpack → optional Hausdorff gate → embed all by name → one self-contained glb → manifest entry. Emits `manifest.json` per object + a top-level `index.json`. The default-variant thumbnail is a rendered model preview (`preview.render_preview`, `_render_thumbnail` helper) that falls back to a texture crop (`--thumbnail-mode texture`, or automatically when the render toolchain is unavailable).
 - **`convert.py` + `apps/obj_to_glb.py`** — the deprecated legacy OBJ→Draco-GLB path (kept until removed).
 
 ### Input config format
@@ -63,7 +65,7 @@ out/
   <prefix>/
     manifest.json                     # the scene <dri-viewer> loads (holds hashed uris)
     <prefix>_<suffix>.<hash>.glb      # one self-contained glb per variant (--hash-names default on)
-    <prefix>_thumb.jpg                # default-variant thumbnail
+    <prefix>_thumb.jpg                # default-variant thumbnail (rendered model preview; texture-crop fallback)
   tmp/                                # intermediates (deleted unless --keep-tmp)
 ```
 

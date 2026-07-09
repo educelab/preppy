@@ -15,9 +15,11 @@ brew install node               # Node 20+ (for the tools below)
 # Node tools
 npm install -g gltfpack          # meshoptimizer geometry decimation/compression
 
-# Python package (optionally with pymeshlab for Hausdorff validation)
+# Python package. Optional extras:
+#   [validate] — pymeshlab, for the Hausdorff decimation gate
+#   [preview]  — trimesh + pyrender, to render the model-preview thumbnail
 pip install .
-pip install '.[validate]'        # includes pymeshlab
+pip install '.[validate,preview]'
 
 # KTX2 embed helper (Node): install its deps once, in the installed package dir
 npm install --prefix "$(python -c 'import preppy, pathlib; print(pathlib.Path(preppy.__file__).parent / "node")')"
@@ -35,8 +37,13 @@ deps installed once as shown above.
 Verify everything is installed and new enough:
 
 ```shell
-voyager-check-tools
+voyager-check-tools              # all CLI tools + optional model-preview backend
+voyager-check-tools preview      # just probe the model-preview render toolchain
 ```
+
+The `preview` line is informational: it renders a tiny offscreen frame to confirm
+the `preview` extra and a GL backend actually work. When it reports `SKIP`, the
+pipeline still runs — thumbnails fall back to a texture crop.
 
 ## Usage
 
@@ -70,7 +77,7 @@ out/
   <prefix>/
     manifest.json                     # the scene the viewer loads
     <prefix>_<suffix>.<hash>.glb      # one self-contained glb per variant
-    <prefix>_thumb.jpg                # default-variant thumbnail
+    <prefix>_thumb.jpg                # default-variant thumbnail (model preview)
 ```
 
 Asset filenames carry an inputs+config content hash by default (served
@@ -87,7 +94,18 @@ current hashed URIs. Useful flags:
 | `--data-root DIR` | root that relative `obj` paths resolve against (default: CWD) |
 | `--uri PREFIX` | absolute-URL prefix for manifest `uri`s |
 | `--prune` | delete hashed assets no longer referenced by a manifest |
+| `--thumbnail-mode {render,texture}` | thumbnail source: a rendered model preview of the default variant (default; needs the `preview` extra, falls back to `texture` if unavailable) or a texture center-crop |
+| `--preview-bg COLOR` | background the rendered preview composites over (hex, `#` optional; default `ffffff`) |
 | `--keep-tmp` | keep intermediate PNG/KTX2/geometry files |
+
+The default `<prefix>_thumb.jpg` is a **rendered preview of the default variant's
+model** (a 3/4 view with computed normals), not a crop of its texture atlas. It is
+a proxy: it renders the OBJ geometry with the *normalized* textures rather than
+the delivered meshopt/KTX2 glb, so it is recognizable but not a pixel-identical
+capture of what `<dri-viewer>` shows. Rendering needs the `preview` extra
+(`trimesh` + `pyrender`) and a working offscreen GL backend; when either is
+missing the run falls back to the texture center-crop (`--thumbnail-mode
+texture`) automatically.
 
 Run `voyager-preppy -h` for the complete list.
 
