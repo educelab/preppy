@@ -234,10 +234,12 @@ export class Viewer {
 
   /**
    * Load a variant's self-contained glb. GLTFLoader transcodes the embedded KTX2 and
-   * applies any `KHR_texture_transform`; we only add the normals the source geometry
-   * lacks. The node transform (gltfpack's KHR_mesh_quantization dequant + registration)
-   * is left on the returned scene graph — never baked into the quantized buffer — so
-   * world coordinates read real scale for measurement.
+   * applies any `KHR_texture_transform`. Delivery glbs now ship smooth normals baked
+   * in the pipeline (Phase 7), so `computeVertexNormals` only fires as a fallback for
+   * a glb that lacks a NORMAL attribute (older assets / `--no-smooth-normals`). The
+   * node transform (gltfpack's KHR_mesh_quantization dequant + registration) is left on
+   * the returned scene graph — never baked into the quantized buffer — so world
+   * coordinates read real scale for measurement.
    */
   async loadModel(url: string): Promise<Object3D> {
     const gltf: GLTF = await this.gltfLoader.loadAsync(url);
