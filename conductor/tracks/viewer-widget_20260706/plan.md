@@ -111,7 +111,7 @@ normals**; the viewer runs `computeVertexNormals()`. gltfpack quantizes position
 (`KHR_mesh_quantization`), so computing normals from the quantized grid amplifies
 into high-frequency normal jitter → jagged shading under raking light.
 ### Tasks
-- [ ] Task 7.1: Compute smooth vertex normals in the pipeline from the **un-quantized**
+- [x] Task 7.1: Compute smooth vertex normals in the pipeline from the **un-quantized**
       OBJ mesh (before gltfpack quantization) and bake them; let gltfpack octahedral-
       quantize the normals (small size cost). Options: compute in a pre-pass and feed
       gltfpack a normal-bearing mesh, or a gltf-transform normal pass. Reverses the
