@@ -179,6 +179,66 @@ input[type="range"]:focus-visible { outline: 2px solid var(--dri-accent); outlin
 .measure-clear:hover { color: var(--dri-ink); border-color: var(--dri-accent); }
 .measure-clear:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 2px; }
 
+/* --- Popover primitive (icon button → anchored panel) --------------------- */
+/* A tool button that floats a small panel out of itself (Light, Adjust, …). The
+   panel anchors to the button and opens upward, since the control cluster sits at
+   the bottom-left of the stage. */
+.popover { position: relative; display: inline-flex; }
+.popover-trigger { padding: 6px 10px; }
+.popover-trigger::before { display: none; } /* icon glyph is the label, no leading dot */
+.popover-panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 4;
+  min-width: 180px;
+  padding: 12px 13px 13px;
+  color: var(--dri-ink);
+  background: var(--dri-glass);
+  border: 1px solid var(--dri-glass-line);
+  border-radius: 10px;
+  box-shadow: var(--dri-shadow);
+  backdrop-filter: blur(9px) saturate(1.1);
+  -webkit-backdrop-filter: blur(9px) saturate(1.1);
+  animation: dri-pop 0.16s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.popover-panel[hidden] { display: none; }
+@keyframes dri-pop {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popover-panel { animation: none; }
+}
+.popover-panel .panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.popover-panel .panel-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dri-dim);
+}
+.panel-reset {
+  appearance: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--dri-dim);
+  background: transparent;
+  border: 1px solid rgba(236, 231, 221, 0.16);
+  border-radius: 6px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.panel-reset:hover { color: var(--dri-ink); border-color: var(--dri-accent); }
+.panel-reset:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 2px; }
+
 /* --- Floating measurement label ------------------------------------------- */
 .measure-label {
   position: absolute;

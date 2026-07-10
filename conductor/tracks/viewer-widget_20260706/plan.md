@@ -3,7 +3,7 @@
 **Track ID:** viewer-widget_20260706
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-07-06
-**Status:** [~] Reopened 2026-07-10 for post-delivery feedback (Phases 5–10); Phases 1–4 complete 2026-07-09
+**Status:** [~] Reopened 2026-07-10 for post-delivery feedback (Phases 5–11); Phases 1–4 complete 2026-07-09
 
 ## Overview
 Scaffold the TS/bundler/web-component skeleton, get one variant rendering, then
@@ -117,7 +117,7 @@ into high-frequency normal jitter → jagged shading under raking light.
       gltfpack a normal-bearing mesh, or a gltf-transform normal pass. Reverses the
       current "normals computed in the viewer" choice — update `geometry.py` docstring,
       CLAUDE.md, and the viewer's `loadModel` (skip compute when normals present).
-- [~] Task 7.2: Regenerate the PHerc1428Cr04 fixture (all variants) → copy to
+- [x] Task 7.2: Regenerate the PHerc1428Cr04 fixture (all variants) → copy to
       `viewer/public/fixtures/`.
 ### Verification
 - [x] Delivered glb has a NORMAL attribute; viewer shows smooth shading under a
@@ -160,29 +160,89 @@ here.)
       partial-rim speckle regression test. Full suite 101/101 green. Refinement found
       during 8.2 verification (rim-speckle from divide amplification) fixed in 8cdbdf1.
 
-## Phase 9: Light-direction widget — "light ball" (feedback #3) — viewer
-Replace the two Az/El sliders with a 2D disc: drag a puck; angle = azimuth,
-radius = elevation (centre = straight-on/90°, rim = grazing/0°). Keep the numeric
-readouts; keep `setRakingLight`/`getRakingLight`. **Confirm interaction model with
-the user before building.**
-### Tasks
-- [ ] Task 9.1: Build the disc control (canvas or SVG in the shadow DOM), pointer-
-      drag → (az, el); reflect current light state; keyboard-accessible.
-- [ ] Task 9.2: Swap it into the controls panel; keep `ui="none"` hiding it.
-### Verification
-- [ ] Dragging drives light az/el (headless: getRakingLight changes as expected);
-      a11y (focus/arrow keys); unit test for angle↔position mapping.
+## Phase 9: Popover primitive + Light panel — "light ball" (feedback #3) — viewer
+Move the raking-light controls out of the inline bar into a popover behind a ☀
+"light-mode" icon button. **Interaction model confirmed with the user (2026-07-10
+grill):**
+- **Shaded-sphere dial** = a top-down view of the light hemisphere. **Drag sets
+  azimuth only** (pointer angle → azimuth). The puck rides at **radius =
+  cos(elevation)** — overhead (el 90°) → centre, grazing (el 0°) → rim — matching
+  the reference image and the existing `setRakingLight` semantics (el 90° =
+  straight-on, ~5° = grazing). The ball always shows the true light direction.
+- **Vertical elevation slider** (native `<input type=range>`) sets elevation AND
+  slides the puck radially. Elevation is NOT set by radial drag.
+- Dial is `role="slider"` (aria-valuemin 0 / valuemax 360 / valuenow = azimuth /
+  valuetext "NN°", aria-label "Light azimuth"); ←/↓ −5°, →/↑ +5°, Shift = 1°,
+  Home/End jump. Keep numeric az/el readouts.
+- **Reset** button → default az 45° / el 22° (double-click puck/slider also resets).
+- Keep `setRakingLight`/`getRakingLight`; add a `raking-change` CustomEvent so
+  `ui="none"` hosts can track state. Remove the inline Az/El sliders from the bar.
 
-## Phase 10: Responsive control panel (feedback #5) — viewer
-Below a width breakpoint, dock the panel to the bottom showing only the band
-(layer) pickers; tuck raking + measure/pan behind an expandable "more" panel.
+Build a **reusable popover-button primitive** now (Light + Adjust use it this
+phase; Bands/Measure adopt it in Phase 11): icon button → anchored popover with
+focus management, Esc / click-outside dismiss, mutual exclusion (opening one
+closes the others), `aria-expanded`/`aria-haspopup`.
 ### Tasks
-- [ ] Task 10.1: Container-query/media-query layout in `styles.ts`; a compact
+- [x] Task 9.1: Reusable popover-button primitive (focus mgmt, Esc/click-outside
+      dismiss, mutual exclusion, aria-expanded/haspopup) + unit tests.
+- [ ] Task 9.2: Shaded-sphere azimuth dial (canvas or SVG in the shadow DOM):
+      drag → azimuth; puck radius = cos(elevation); `role=slider` keyboard model;
+      unit test for angle↔azimuth and elevation↔radius mapping.
+- [ ] Task 9.3: Elevation slider + assemble the Light panel behind the ☀ button;
+      remove inline Az/El sliders; Reset button; wire `setRakingLight`/`getRakingLight`
+      + emit `raking-change`; keep `ui="none"` hiding it.
+- [ ] Task 9.4: Reset-view button in the tool row → `resetView()` (reframes the
+      current model, reusing `Viewer.frameObject`).
+### Verification
+- [ ] Headless: drag + arrow keys drive `getRakingLight` as expected; elevation
+      slider moves the puck radially; Reset returns to az 45°/el 22°; reset-view
+      reframes; popover a11y (focus/Esc/mutual-exclusion); `ui="none"` hides both
+      buttons. Unit tests for popover + dial mappings green.
+
+## Phase 10: Image brightness/contrast adjust (feedback, 2026-07-10 grill) — viewer
+Per-variant runtime brightness/contrast corrective for the visible base mesh (some
+textures differ in brightness). Behind a ◑ "tune" icon button, using the Phase 9
+popover primitive. **Design confirmed with the user:**
+- Applied via a **per-material `onBeforeCompile` shader on the base mesh albedo**,
+  in **display (sRGB) space**: `c=toSRGB(albedo); c=(c−0.5)*(1+k·contrast)+0.5;
+  c+=b·brightness; albedo=toLinear(c)`. Affects only the mesh texture — NOT the
+  raking-light response and NOT measurement overlays/markers.
+- Sliders run **−100…+100, 0 = exact identity** (image-editor style).
+- **Per-variant, in-memory, keyed by variant id**; restored when toggling variants;
+  cleared when a new manifest/object loads. Viewer-only (no manifest/pipeline
+  change) but the API is shaped to accept seeded per-variant defaults later.
+- **Reset** button → this variant's brightness/contrast to 0/0 (double-click resets).
+- API: `setImageAdjust({brightness,contrast})` / `getImageAdjust()` (current
+  variant), mirroring `setRakingLight`; emit an `image-adjust-change` CustomEvent;
+  `ui="none"` hides the panel. No new HTML attributes for transient state.
+### Tasks
+- [ ] Task 10.1: Per-material albedo brightness/contrast shader (`onBeforeCompile`,
+      display-space, identity at 0) applied to base mesh material(s) only; unit test
+      the formula (identity at 0, monotonicity).
+- [ ] Task 10.2: Per-variant in-memory state keyed by variant id — reapply on
+      variant switch, reset on new manifest; `setImageAdjust`/`getImageAdjust` +
+      `image-adjust-change`; `ui="none"` support.
+- [ ] Task 10.3: Adjust panel behind the ◑ button (brightness + contrast sliders,
+      Reset) via the popover primitive.
+### Verification
+- [ ] Headless pixel sampling: adjustments change the mesh albedo but leave
+      measurement overlays unchanged; per-variant values persist across switches and
+      reset on new manifest; Reset zeroes the current variant. Formula + state unit
+      tests green.
+
+## Phase 11: Responsive control panel (feedback #5) — viewer
+Below a width breakpoint, dock the panel to the bottom showing only the band
+(layer) pickers; tuck the rest behind popover buttons. Now that Phase 9 provides a
+reusable popover primitive, convert Bands and Measure/Pan to it too so the whole
+bar is icon-buttons + popovers.
+### Tasks
+- [ ] Task 11.1: Container-query/media-query layout in `styles.ts`; a compact
       docked mode + an expand toggle in `controls.ts`.
-- [ ] Task 10.2: Ensure the measure hint/label + light widget still work docked.
+- [ ] Task 11.2: Convert Bands and Measure/Pan to the popover primitive; ensure the
+      measure hint/label, Light + Adjust panels, and reset-view all work docked.
 ### Verification
 - [ ] Headless screenshots at wide + narrow viewports; controls reachable in both;
-      no horizontal overflow.
+      no horizontal overflow; popovers open/dismiss correctly when docked.
 
 ---
 
