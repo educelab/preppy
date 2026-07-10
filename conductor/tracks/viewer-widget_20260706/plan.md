@@ -105,7 +105,7 @@ headless Playwright/SwiftShader harness (see `e2e/`).
 - [x] Headless: orbit mode targetΔ=0 (rotates); pan mode targetΔ=7.7 (pans); pan⇔
       measure mutually exclusive. typecheck clean, 27 unit + 7 e2e green.
 
-## Phase 7: Smooth-shaded normals (feedback #4) — pipeline
+## Phase 7: Smooth-shaded normals (feedback #4) — pipeline — COMPLETE
 Finding: geometry is well-indexed (404k verts / 729k tris) but ships **no
 normals**; the viewer runs `computeVertexNormals()`. gltfpack quantizes positions
 (`KHR_mesh_quantization`), so computing normals from the quantized grid amplifies
@@ -120,9 +120,11 @@ into high-frequency normal jitter → jagged shading under raking light.
 - [~] Task 7.2: Regenerate the PHerc1428Cr04 fixture (all variants) → copy to
       `viewer/public/fixtures/`.
 ### Verification
-- [ ] Delivered glb has a NORMAL attribute; viewer shows smooth shading under a
+- [x] Delivered glb has a NORMAL attribute; viewer shows smooth shading under a
       grazing raking light (headless screenshot before/after). Geometry byte size
-      delta noted.
+      delta noted. Verified: NORMAL (octahedral BYTE) on all 4 variants + TEXCOORD_0;
+      getRenderStats().hasNormals=true; ~+1 MB/variant; 9/9 e2e + 97/97 pipeline green;
+      user-confirmed smooth under grazing light in the running viewer (2026-07-10).
 
 ## Phase 8: PGS nodataFill orange-fringe fix (feedback #1) — pipeline
 Finding (confirmed w/ repro): PGS = `2_center.jpg`, a 32768² grayscale atlas with
