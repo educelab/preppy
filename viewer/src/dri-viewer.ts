@@ -409,6 +409,9 @@ export class DriViewer extends HTMLElement {
     if (!this.#measure || on === this.#measuring) {
       return;
     }
+    if (on) {
+      this.setPanMode(false); // measure + pan both claim left-drag; keep them exclusive
+    }
     this.#measuring = on;
     if (on) {
       this.#measure.enable();
@@ -417,6 +420,24 @@ export class DriViewer extends HTMLElement {
     }
     this.#stage.dataset['measuring'] = String(on);
     this.#controls?.setMeasuring(on);
+  }
+
+  /** Whether pan mode (left-drag pans) is active. */
+  get panning(): boolean {
+    return this.#viewer?.panning ?? false;
+  }
+
+  /** Enter/leave pan mode: left-drag pans instead of orbiting (right-drag always pans). */
+  setPanMode(on: boolean): void {
+    if (!this.#viewer || on === this.#viewer.panning) {
+      return;
+    }
+    if (on) {
+      this.setMeasuring(false); // mutually exclusive with measure (both use left-drag)
+    }
+    this.#viewer.setPanMode(on);
+    this.#stage.dataset['panning'] = String(on);
+    this.#controls?.setPanning(on);
   }
 
   /** Remove the drawn measurement (markers, line, label). Leaves measure mode as-is. */
@@ -470,12 +491,14 @@ export class DriViewer extends HTMLElement {
       setRakingLight: (az, el) => this.setRakingLight(az, el),
       setMeasuring: (on) => this.setMeasuring(on),
       clearMeasurement: () => this.clearMeasurement(),
+      setPanMode: (on) => this.setPanMode(on),
     });
     if (this.#activeVariantId) {
       this.#controls.setActiveVariant(this.#activeVariantId);
     }
     this.#controls.setMeasuring(this.#measuring);
     this.#controls.setHasMeasurement(this.#measure?.hasMeasurement ?? false);
+    this.#controls.setPanning(this.panning);
   }
 
   #destroyControls(): void {

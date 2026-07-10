@@ -18,12 +18,15 @@ export interface ControlsHost {
   setMeasuring(on: boolean): void;
   /** Remove the drawn measurement. */
   clearMeasurement(): void;
+  /** Toggle pan mode (left-drag pans instead of orbiting). */
+  setPanMode(on: boolean): void;
 }
 
 export class Controls {
   #host: ControlsHost;
   #root: HTMLDivElement;
   #bands = new Map<string, HTMLButtonElement>();
+  #panButton!: HTMLButtonElement;
   #measureButton!: HTMLButtonElement;
   #clearButton!: HTMLButtonElement;
 
@@ -33,7 +36,7 @@ export class Controls {
     this.#root.className = 'ui';
     this.#root.setAttribute('part', 'controls');
 
-    this.#root.append(this.buildBands(), this.buildRaking(), this.buildMeasureRow());
+    this.#root.append(this.buildBands(), this.buildRaking(), this.buildToolRow());
 
     mount.append(this.#root);
   }
@@ -123,13 +126,25 @@ export class Controls {
     return Number(this.#elInput.value);
   }
 
-  private buildMeasureRow(): HTMLDivElement {
+  private buildToolRow(): HTMLDivElement {
     const row = document.createElement('div');
-    row.className = 'measure-row';
+    row.className = 'tool-row';
+
+    // Pan (hand) toggle: makes left-drag pan a first-class gesture for reading the
+    // surface up close, alongside the always-on right-drag pan.
+    this.#panButton = document.createElement('button');
+    this.#panButton.type = 'button';
+    this.#panButton.className = 'tool pan';
+    this.#panButton.textContent = 'Pan';
+    this.#panButton.title = 'Pan (drag). Right-drag always pans.';
+    this.#panButton.setAttribute('aria-pressed', 'false');
+    this.#panButton.addEventListener('click', () =>
+      this.#host.setPanMode(this.#panButton.getAttribute('aria-pressed') !== 'true'),
+    );
 
     this.#measureButton = document.createElement('button');
     this.#measureButton.type = 'button';
-    this.#measureButton.className = 'measure';
+    this.#measureButton.className = 'tool measure';
     this.#measureButton.textContent = 'Measure';
     this.#measureButton.setAttribute('aria-pressed', 'false');
     this.#measureButton.addEventListener('click', () =>
@@ -145,13 +160,18 @@ export class Controls {
     this.#clearButton.hidden = true;
     this.#clearButton.addEventListener('click', () => this.#host.clearMeasurement());
 
-    row.append(this.#measureButton, this.#clearButton);
+    row.append(this.#panButton, this.#measureButton, this.#clearButton);
     return row;
   }
 
   /** Show/hide the Clear button to match whether a measurement is drawn. */
   setHasMeasurement(has: boolean): void {
     this.#clearButton.hidden = !has;
+  }
+
+  /** Reflect pan-mode state on the toggle. */
+  setPanning(on: boolean): void {
+    this.#panButton.setAttribute('aria-pressed', String(on));
   }
 
   /** Reflect the active variant on the band buttons. */

@@ -2,14 +2,14 @@
   "id": "viewer-widget_20260706",
   "title": "<dri-viewer> web component",
   "type": "feature",
-  "status": "complete",
+  "status": "in_progress",
   "created": "2026-07-06T18:56:11Z",
-  "updated": "2026-07-09T00:00:00Z",
+  "updated": "2026-07-10T00:00:00Z",
   "depends_on": ["toolchain-spike_20260706", "delivery-pipeline_20260706"],
-  "current_phase": 4,
-  "current_task": "4.3",
-  "phases": { "total": 4, "completed": 4 },
-  "tasks": { "total": 13, "completed": 13 },
+  "current_phase": 7,
+  "current_task": "7.1",
+  "phases": { "total": 10, "completed": 6 },
+  "tasks": { "total": 24, "completed": 18 },
   "commits": [
     "e8f697b: viewer: scaffold TS + Vite web-component bundle",
     "0609c16: viewer: <dri-viewer> custom-element skeleton + test harness",
@@ -17,6 +17,8 @@
     "7391425: viewer: Playwright headless WebGL verification harness",
     "2805fc7: viewer: load manifest + render default variant (Phase 2)",
     "cf7f2e5: viewer: camera-preserving variant switch + cache/preload (Phase 3)",
-    "1876a1a: viewer: measurement + raking light + embedding (Phase 4)"
+    "1876a1a: viewer: measurement + raking light + embedding (Phase 4)",
+    "813cac5: viewer: fix blank render when manifest+variant set in same tick (Phase 5)",
+    "7cd41ce: viewer: persistent measurement + zoom-constant marker size (Phase 5)"
   ]
 }

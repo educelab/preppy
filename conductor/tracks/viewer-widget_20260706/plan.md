@@ -3,7 +3,7 @@
 **Track ID:** viewer-widget_20260706
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-07-06
-**Status:** [x] Complete (2026-07-09)
+**Status:** [~] Reopened 2026-07-10 for post-delivery feedback (Phases 5–10); Phases 1–4 complete 2026-07-09
 
 ## Overview
 Scaffold the TS/bundler/web-component skeleton, get one variant rendering, then
@@ -67,6 +67,106 @@ pipeline produces real assets. Each variant is its own self-contained glb.
 - [x] Camera-preservation and measurement checks passing (e2e/phase3, phase4).
 - [x] Embed + asset-hosting docs written (README.md, examples/embed.html).
 - [x] Ready for review. Suites: typecheck clean, 19 unit + 8 e2e green.
+
+---
+
+# Post-delivery feedback (2026-07-10)
+
+Reopened after a live dev-server review. Each item below is a self-contained
+phase; findings are recorded inline so a phase can be picked up in fresh context
+without re-deriving. Dev host: `npm run dev` in `viewer/`, fixtures under
+`viewer/public/fixtures/` (NOT `dist/`); drive via
+`/?manifest=/fixtures/PHerc1428Cr04/manifest.json&variant=<id>`. Verify with the
+headless Playwright/SwiftShader harness (see `e2e/`).
+
+## Phase 5: Blank-render race + measurement UX (feedback #6, #7) — COMPLETE
+### Tasks
+- [x] Task 5.1: Fix blank render when `manifest` + `variant` are set in the same
+      tick (reload() invalidated #manifest; variant handler defers until a manifest
+      is loaded). Commit 813cac5.
+- [x] Task 5.2: Measurement persists after leaving measure mode; explicit "Clear"
+      button (shown only when a measurement exists); a 3rd pick still starts fresh.
+- [x] Task 5.3: Markers rescale per-frame to a constant ~5px on-screen radius
+      (was a fixed world radius that ballooned when zoomed in). Commit 7cd41ce.
+### Verification
+- [x] Headless: 2 picks → "24.78 cm"; persists + Clear works after disable;
+      markers stay small when zoomed. typecheck clean, 26 unit + phase1–4 e2e green.
+
+## Phase 6: Pan as a first-class tool (feedback #2) — COMPLETE
+### Tasks
+- [x] Task 6.1: Pan (hand) toggle in the controls, mutually exclusive with Measure.
+      Pan mode swaps OrbitControls left-drag to PAN
+      (`controls.mouseButtons.LEFT = MOUSE.PAN`), restoring ROTATE when off. Exposes
+      `setPanMode(on)`/`panning` on `<dri-viewer>` + `Viewer.setPanMode`. Right-drag
+      still pans in both modes.
+- [x] Task 6.2: Cursor affordance (grab/grabbing) via a `data-panning` stage attr,
+      mirroring the `data-measuring` crosshair.
+### Verification
+- [x] Headless: orbit mode targetΔ=0 (rotates); pan mode targetΔ=7.7 (pans); pan⇔
+      measure mutually exclusive. typecheck clean, 27 unit + 7 e2e green.
+
+## Phase 7: Smooth-shaded normals (feedback #4) — pipeline
+Finding: geometry is well-indexed (404k verts / 729k tris) but ships **no
+normals**; the viewer runs `computeVertexNormals()`. gltfpack quantizes positions
+(`KHR_mesh_quantization`), so computing normals from the quantized grid amplifies
+into high-frequency normal jitter → jagged shading under raking light.
+### Tasks
+- [ ] Task 7.1: Compute smooth vertex normals in the pipeline from the **un-quantized**
+      OBJ mesh (before gltfpack quantization) and bake them; let gltfpack octahedral-
+      quantize the normals (small size cost). Options: compute in a pre-pass and feed
+      gltfpack a normal-bearing mesh, or a gltf-transform normal pass. Reverses the
+      current "normals computed in the viewer" choice — update `geometry.py` docstring,
+      CLAUDE.md, and the viewer's `loadModel` (skip compute when normals present).
+- [ ] Task 7.2: Regenerate the PHerc1428Cr04 fixture (all variants) → copy to
+      `viewer/public/fixtures/`.
+### Verification
+- [ ] Delivered glb has a NORMAL attribute; viewer shows smooth shading under a
+      grazing raking light (headless screenshot before/after). Geometry byte size
+      delta noted.
+
+## Phase 8: PGS nodataFill orange-fringe fix (feedback #1) — pipeline
+Finding (confirmed w/ repro): PGS = `2_center.jpg`, a 32768² grayscale atlas with
+`nodataFill: #ff7f25` covering ~2/3 of the image. `normalize()` resizes to 8192
+**before** `fill_nodata()`, so the 4× downscale blends orange into UV-island edges;
+`fill_nodata` (fuzz 0.05) then back-fills the background *from those orange-tinted
+edge pixels*. Repro: 0% pure orange remains but ~30% is orange-tinted; bright
+orange fringes rim every island → orange specks on the surface. (The grey look
+itself is the source band, not a defect.)
+### Tasks
+- [ ] Task 8.1: Make the downscale nodata-aware so orange never blends in: at full
+      res build the orange mask (cheap threshold), set masked pixels to alpha 0,
+      resize RGBA (alpha-weighted so orange contributes nothing), then fill the
+      still-transparent regions (nearest-valid, existing EDT) instead of matching a
+      color. Keep it off the gigapixel EDT path (the old full-res dilate hung).
+- [ ] Task 8.2: Regenerate PGS variant → copy to fixtures.
+### Verification
+- [ ] Residual orange-tinted fraction ≈ 0 at fuzz 0.10 on the normalized image;
+      no orange fringes on the surface in a headless PGS screenshot. Add a unit test
+      on the mask-aware path with a synthetic tiny atlas.
+
+## Phase 9: Light-direction widget — "light ball" (feedback #3) — viewer
+Replace the two Az/El sliders with a 2D disc: drag a puck; angle = azimuth,
+radius = elevation (centre = straight-on/90°, rim = grazing/0°). Keep the numeric
+readouts; keep `setRakingLight`/`getRakingLight`. **Confirm interaction model with
+the user before building.**
+### Tasks
+- [ ] Task 9.1: Build the disc control (canvas or SVG in the shadow DOM), pointer-
+      drag → (az, el); reflect current light state; keyboard-accessible.
+- [ ] Task 9.2: Swap it into the controls panel; keep `ui="none"` hiding it.
+### Verification
+- [ ] Dragging drives light az/el (headless: getRakingLight changes as expected);
+      a11y (focus/arrow keys); unit test for angle↔position mapping.
+
+## Phase 10: Responsive control panel (feedback #5) — viewer
+Below a width breakpoint, dock the panel to the bottom showing only the band
+(layer) pickers; tuck raking + measure/pan behind an expandable "more" panel.
+### Tasks
+- [ ] Task 10.1: Container-query/media-query layout in `styles.ts`; a compact
+      docked mode + an expand toggle in `controls.ts`.
+- [ ] Task 10.2: Ensure the measure hint/label + light widget still work docked.
+### Verification
+- [ ] Headless screenshots at wide + narrow viewports; controls reachable in both;
+      no horizontal overflow.
 
 ---
 

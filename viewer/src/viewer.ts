@@ -13,6 +13,7 @@ import {
   MathUtils,
   Material,
   Mesh,
+  MOUSE,
   type Object3D,
   PerspectiveCamera,
   Scene,
@@ -91,6 +92,9 @@ export class Viewer {
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
+    // Right-drag pans by default; pan mode (below) also maps left-drag to pan so
+    // reading the surface up close is a first-class, single-button gesture.
+    this.controls.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN };
 
     this.setupLights();
 
@@ -156,6 +160,20 @@ export class Viewer {
   /** Current raking-light angles (degrees). */
   getRakingLight(): { azimuth: number; elevation: number } {
     return { azimuth: this.#rakingAzimuth, elevation: this.#rakingElevation };
+  }
+
+  /** Whether left-drag pans (pan mode) instead of orbiting. */
+  #panning = false;
+
+  /** Map left-drag to pan (`on`) or orbit (`off`); right-drag always pans. */
+  setPanMode(on: boolean): void {
+    this.#panning = on;
+    this.controls.mouseButtons.LEFT = on ? MOUSE.PAN : MOUSE.ROTATE;
+  }
+
+  /** True when left-drag pans (pan mode). */
+  get panning(): boolean {
+    return this.#panning;
   }
 
   /** Register a callback run every frame (after controls.update); returns an unsubscribe. */

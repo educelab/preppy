@@ -31,6 +31,8 @@ export const CSS_TEXT = `
 .stage { position: absolute; inset: 0; }
 .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .stage[data-measuring="true"] canvas { cursor: crosshair; }
+.stage[data-panning="true"] canvas { cursor: grab; }
+.stage[data-panning="true"] canvas:active { cursor: grabbing; }
 
 /* --- Control panel -------------------------------------------------------- */
 .ui {
@@ -126,15 +128,14 @@ input[type="range"]::-moz-range-thumb {
 }
 input[type="range"]:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 3px; }
 
-/* Measure toggle + Clear (Clear appears only while a measurement is drawn). */
-.measure-row { display: flex; align-items: center; gap: 8px; }
-.measure {
+/* Tool toggles (Pan, Measure) + Clear (Clear appears only while a measurement is drawn). */
+.tool-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tool {
   appearance: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  align-self: flex-start;
   padding: 6px 12px 6px 10px;
   font: inherit;
   font-size: 12px;
@@ -144,22 +145,23 @@ input[type="range"]:focus-visible { outline: 2px solid var(--dri-accent); outlin
   border-radius: 8px;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.measure::before {
+.tool::before {
   content: "";
   width: 9px;
   height: 9px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
   opacity: 0.7;
 }
-.measure:hover { border-color: var(--dri-accent); }
-.measure[aria-pressed="true"] {
+/* Measure = ring; Pan = a small square (hand/move affordance) to read distinctly. */
+.tool.measure::before { border: 2px solid currentColor; border-radius: 50%; }
+.tool.pan::before { border: 2px solid currentColor; border-radius: 2px; }
+.tool:hover { border-color: var(--dri-accent); }
+.tool[aria-pressed="true"] {
   color: #1b1512;
   background: var(--dri-accent);
   border-color: var(--dri-accent);
   font-weight: 600;
 }
-.measure:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 2px; }
+.tool:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 2px; }
 
 .measure-clear {
   appearance: none;

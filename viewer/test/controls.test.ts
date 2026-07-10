@@ -19,6 +19,7 @@ function makeHost(overrides: Partial<ControlsHost> = {}): ControlsHost & {
     setRakingLight: (az, el) => raked.push([az, el]),
     setMeasuring: (on) => measured.push(on),
     clearMeasurement: () => {},
+    setPanMode: () => {},
     selected,
     raked,
     measured,
@@ -79,6 +80,19 @@ describe('Controls', () => {
     controls.setMeasuring(true);
     button.click();
     expect(host.measured).toEqual([true, false]);
+  });
+
+  it('toggles pan mode via the host and reflects state back', () => {
+    const panned: boolean[] = [];
+    const host = makeHost({ setPanMode: (on) => panned.push(on) });
+    const controls = new Controls(mount, host);
+    const button = mount.querySelector<HTMLButtonElement>('.tool.pan')!;
+    button.click();
+    expect(panned).toEqual([true]);
+    controls.setPanning(true);
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    button.click();
+    expect(panned).toEqual([true, false]);
   });
 
   it('shows the Clear button only when a measurement exists and calls the host', () => {
