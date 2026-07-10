@@ -94,6 +94,30 @@ def test_fill_transparent_backfills_from_nearest_opaque_pixel(tmp_path):
     assert (px == (200, 10, 10)).all()       # every hole filled from the chart
 
 
+def test_fill_transparent_partial_rim_does_not_speckle(tmp_path):
+    """A thin partial-alpha rim carrying an amplified/saturated color must be
+    weighted down by its coverage (composited), not kept at full strength — the
+    fringe bug. A ~5%-coverage 'orange' rim next to a solid gray field should
+    composite to essentially gray, never survive as orange."""
+    np = pytest.importorskip('numpy')
+    pytest.importorskip('scipy')
+    from PIL import Image
+
+    arr = np.zeros((8, 8, 4), dtype=np.uint8)
+    arr[:, :4] = (128, 128, 128, 255)     # solid chart
+    arr[:, 4] = (255, 127, 9, 13)         # thin rim, ~5% coverage, saturated
+    arr[:, 5:] = (255, 127, 9, 0)         # nodata (masked), saturated leftover
+    src = tmp_path / 'tex.png'
+    Image.fromarray(arr, 'RGBA').save(src)
+
+    texture.fill_transparent(src)
+
+    px = np.asarray(Image.open(src).convert('RGB')).astype(int)
+    d_orange = np.abs(px - (0xff, 0x7f, 0x25)).sum(-1)
+    d_gray = np.abs(px - 128).sum(-1)
+    assert (d_gray < d_orange).all(), 'no pixel should read as orange'
+
+
 def test_fill_transparent_noop_on_plain_rgb(tmp_path):
     """A plain RGB image (the no-fill path) is returned untouched."""
     np = pytest.importorskip('numpy')

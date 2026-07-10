@@ -102,17 +102,25 @@ def parse_hex_color(color: str) -> Tuple[int, int, int]:
 
 
 def fill_transparent(path: PathLike) -> Path:
-    """Back-fill the fully-transparent pixels of an RGBA ``path`` from their
-    nearest opaque neighbour, drop the alpha channel, and rewrite ``path`` as
-    RGB in place; return ``path``.
+    """Composite the masked RGBA ``path`` over a nodata back-fill, drop the alpha
+    channel, and rewrite ``path`` as RGB in place; return ``path``.
 
-    :func:`normalize_masked_cmd` leaves the nodata background at alpha 0 (its RGB
-    is meaningless — premultiplied to black by the resize). Every masked pixel is
-    replaced by the nearest opaque chart pixel via
-    :func:`scipy.ndimage.distance_transform_edt`, so *no* fill color survives and
-    nothing bleeds at any mip level. Runs on the already-downsized image, keeping
-    the distance transform off the gigapixel path. A plain RGB PNG (no alpha) is
-    returned unchanged.
+    :func:`normalize_masked_cmd`'s alpha-weighted resize leaves the nodata
+    background at alpha 0 and the island rims at *partial* alpha (fractional
+    coverage). Two rules keep any trace of the fill off the rendered surface:
+
+    - The back-fill is extruded (nearest-neighbour, via
+      :func:`scipy.ndimage.distance_transform_edt`) only from **fully-opaque**
+      pixels — real chart color, no fill contribution — so extruding it can never
+      reintroduce the fill.
+    - The result is the resized image *composited over* that back-fill
+      (``alpha*rgb + (1-alpha)*fill``), not the un-premultiplied color. Dividing a
+      thin rim by its small alpha would amplify sub-pixel noise into saturated
+      speckle (a fringe); compositing weights each rim pixel by its true coverage
+      instead, so a nearly-transparent rim contributes almost nothing.
+
+    Runs on the already-downsized image, keeping the distance transform off the
+    gigapixel path. A plain RGB PNG (no alpha) is returned unchanged.
     """
     import numpy as np
     from PIL import Image
@@ -122,18 +130,21 @@ def fill_transparent(path: PathLike) -> Path:
     if img.mode != 'RGBA':
         return path  # no mask to act on (plain no-fill path)
 
-    arr = np.asarray(img)
-    rgb, alpha = arr[..., :3], arr[..., 3]
-    mask = alpha == 0  # nodata pixels to fill
+    arr = np.asarray(img).astype(np.float32)
+    rgb, alpha = arr[..., :3], arr[..., 3:4] / 255.0
+    solid = arr[..., 3] == 255            # fully-valid chart pixels only
 
-    if mask.any() and not mask.all():
+    fill = rgb
+    if solid.any() and not solid.all():
         from scipy import ndimage
-        # For each masked pixel, index of the nearest opaque (valid) pixel.
+        # For every pixel, the color of the nearest fully-opaque chart pixel.
         idx = ndimage.distance_transform_edt(
-            mask, return_distances=False, return_indices=True)
-        rgb = rgb[tuple(idx)]
+            ~solid, return_distances=False, return_indices=True)
+        fill = rgb[tuple(idx)]
 
-    Image.fromarray(np.ascontiguousarray(rgb), 'RGB').save(path)
+    out = alpha * rgb + (1.0 - alpha) * fill
+    out = np.ascontiguousarray(np.rint(out).clip(0, 255).astype(np.uint8))
+    Image.fromarray(out, 'RGB').save(path)
     return path
 
 
