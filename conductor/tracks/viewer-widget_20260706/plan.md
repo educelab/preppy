@@ -142,7 +142,7 @@ nodataFill fringes (Task 8.1) are the bug. (Optional future nicety: collapse suc
 grayscale-as-RGB textures to single-channel before KTX2 to save size — out of scope
 here.)
 ### Tasks
-- [ ] Task 8.1: Make the downscale nodata-aware so orange never blends in: at full
+- [x] Task 8.1: Make the downscale nodata-aware so orange never blends in: at full
       res build the orange mask (cheap threshold), set masked pixels to alpha 0,
       resize RGBA (alpha-weighted so orange contributes nothing), then fill the
       still-transparent regions (nearest-valid, existing EDT) instead of matching a
