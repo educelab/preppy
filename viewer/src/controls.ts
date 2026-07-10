@@ -16,13 +16,16 @@ export interface ControlsHost {
   setRakingLight(azimuth: number, elevation: number): void;
   /** Toggle two-point measure mode. */
   setMeasuring(on: boolean): void;
+  /** Remove the drawn measurement. */
+  clearMeasurement(): void;
 }
 
 export class Controls {
   #host: ControlsHost;
   #root: HTMLDivElement;
   #bands = new Map<string, HTMLButtonElement>();
-  #measureButton: HTMLButtonElement;
+  #measureButton!: HTMLButtonElement;
+  #clearButton!: HTMLButtonElement;
 
   constructor(mount: ParentNode, host: ControlsHost) {
     this.#host = host;
@@ -30,9 +33,7 @@ export class Controls {
     this.#root.className = 'ui';
     this.#root.setAttribute('part', 'controls');
 
-    this.#root.append(this.buildBands(), this.buildRaking());
-    this.#measureButton = this.buildMeasure();
-    this.#root.append(this.#measureButton);
+    this.#root.append(this.buildBands(), this.buildRaking(), this.buildMeasureRow());
 
     mount.append(this.#root);
   }
@@ -122,16 +123,35 @@ export class Controls {
     return Number(this.#elInput.value);
   }
 
-  private buildMeasure(): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'measure';
-    button.textContent = 'Measure';
-    button.setAttribute('aria-pressed', 'false');
-    button.addEventListener('click', () =>
-      this.#host.setMeasuring(button.getAttribute('aria-pressed') !== 'true'),
+  private buildMeasureRow(): HTMLDivElement {
+    const row = document.createElement('div');
+    row.className = 'measure-row';
+
+    this.#measureButton = document.createElement('button');
+    this.#measureButton.type = 'button';
+    this.#measureButton.className = 'measure';
+    this.#measureButton.textContent = 'Measure';
+    this.#measureButton.setAttribute('aria-pressed', 'false');
+    this.#measureButton.addEventListener('click', () =>
+      this.#host.setMeasuring(this.#measureButton.getAttribute('aria-pressed') !== 'true'),
     );
-    return button;
+
+    // Clear is shown only when a measurement is on screen, so a measurement can persist
+    // through orbit/pan/zoom and be dismissed explicitly (Task 6).
+    this.#clearButton = document.createElement('button');
+    this.#clearButton.type = 'button';
+    this.#clearButton.className = 'measure-clear';
+    this.#clearButton.textContent = 'Clear';
+    this.#clearButton.hidden = true;
+    this.#clearButton.addEventListener('click', () => this.#host.clearMeasurement());
+
+    row.append(this.#measureButton, this.#clearButton);
+    return row;
+  }
+
+  /** Show/hide the Clear button to match whether a measurement is drawn. */
+  setHasMeasurement(has: boolean): void {
+    this.#clearButton.hidden = !has;
   }
 
   /** Reflect the active variant on the band buttons. */

@@ -126,7 +126,8 @@ input[type="range"]::-moz-range-thumb {
 }
 input[type="range"]:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 3px; }
 
-/* Measure toggle. */
+/* Measure toggle + Clear (Clear appears only while a measurement is drawn). */
+.measure-row { display: flex; align-items: center; gap: 8px; }
 .measure {
   appearance: none;
   cursor: pointer;
@@ -159,6 +160,22 @@ input[type="range"]:focus-visible { outline: 2px solid var(--dri-accent); outlin
   font-weight: 600;
 }
 .measure:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 2px; }
+
+.measure-clear {
+  appearance: none;
+  cursor: pointer;
+  padding: 6px 11px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--dri-dim);
+  background: transparent;
+  border: 1px solid rgba(236, 231, 221, 0.16);
+  border-radius: 8px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.measure-clear[hidden] { display: none; }
+.measure-clear:hover { color: var(--dri-ink); border-color: var(--dri-accent); }
+.measure-clear:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 2px; }
 
 /* --- Floating measurement label ------------------------------------------- */
 .measure-label {

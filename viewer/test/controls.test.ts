@@ -18,6 +18,7 @@ function makeHost(overrides: Partial<ControlsHost> = {}): ControlsHost & {
     selectVariant: (id) => selected.push(id),
     setRakingLight: (az, el) => raked.push([az, el]),
     setMeasuring: (on) => measured.push(on),
+    clearMeasurement: () => {},
     selected,
     raked,
     measured,
@@ -78,6 +79,20 @@ describe('Controls', () => {
     controls.setMeasuring(true);
     button.click();
     expect(host.measured).toEqual([true, false]);
+  });
+
+  it('shows the Clear button only when a measurement exists and calls the host', () => {
+    const cleared: number[] = [];
+    const host = makeHost({ clearMeasurement: () => cleared.push(1) });
+    const controls = new Controls(mount, host);
+    const clear = mount.querySelector<HTMLButtonElement>('.measure-clear')!;
+    expect(clear.hidden).toBe(true);
+    controls.setHasMeasurement(true);
+    expect(clear.hidden).toBe(false);
+    clear.click();
+    expect(cleared).toEqual([1]);
+    controls.setHasMeasurement(false);
+    expect(clear.hidden).toBe(true);
   });
 
   it('removes its DOM on dispose', () => {

@@ -199,6 +199,9 @@ export class DriViewer extends HTMLElement {
     }
     this.#measure = new MeasureTool(this.#viewer, this.#stage);
     this.#measure.onMeasure((result) => this.#onMeasureComplete(result));
+    this.#measure.onChange(() =>
+      this.#controls?.setHasMeasurement(this.#measure?.hasMeasurement ?? false),
+    );
     void this.reload();
   }
 
@@ -416,6 +419,11 @@ export class DriViewer extends HTMLElement {
     this.#controls?.setMeasuring(on);
   }
 
+  /** Remove the drawn measurement (markers, line, label). Leaves measure mode as-is. */
+  clearMeasurement(): void {
+    this.#measure?.clear();
+  }
+
   /**
    * Aim the raking key light. `azimuth` sweeps around the surface normal (deg); low
    * `elevation` (deg, grazing) exaggerates relief. No-op if not rendering.
@@ -461,11 +469,13 @@ export class DriViewer extends HTMLElement {
       },
       setRakingLight: (az, el) => this.setRakingLight(az, el),
       setMeasuring: (on) => this.setMeasuring(on),
+      clearMeasurement: () => this.clearMeasurement(),
     });
     if (this.#activeVariantId) {
       this.#controls.setActiveVariant(this.#activeVariantId);
     }
     this.#controls.setMeasuring(this.#measuring);
+    this.#controls.setHasMeasurement(this.#measure?.hasMeasurement ?? false);
   }
 
   #destroyControls(): void {

@@ -10,12 +10,11 @@ import {
   BufferGeometry,
   Line,
   LineBasicMaterial,
+  MathUtils,
   Mesh,
   MeshBasicMaterial,
-  Box3,
   Group,
   Raycaster,
-  Sphere,
   SphereGeometry,
   Vector2,
   Vector3,
@@ -34,6 +33,11 @@ export interface MeasureResult {
   points: [number[], number[]];
 }
 
+/** Target on-screen marker radius, in CSS pixels, held constant across zoom. */
+const MARKER_SCREEN_PX = 5;
+/** A unit-radius sphere; each marker is this geometry scaled per frame (Task 7). */
+const MARKER_GEOMETRY = new SphereGeometry(1, 16, 16);
+
 export class MeasureTool {
   #viewer: Viewer;
   #container: HTMLElement;
@@ -42,9 +46,14 @@ export class MeasureTool {
   #hint: HTMLDivElement;
   #raycaster = new Raycaster();
   #picks: Vector3[] = [];
+  #markers: Mesh[] = [];
   #enabled = false;
   #unit = 'cm';
   #onMeasure: ((result: MeasureResult) => void) | null = null;
+  #onChange: (() => void) | null = null;
+  /** Frame callback runs for the tool's lifetime: rescales markers + pins the label,
+   * so a completed measurement stays legible and correctly sized as the user orbits,
+   * pans, and zooms — even after measure mode is turned off. */
   #unsubscribeFrame: (() => void) | null = null;
 
   constructor(viewer: Viewer, container: HTMLElement) {
@@ -62,10 +71,16 @@ export class MeasureTool {
     this.#hint.textContent = 'Click two points to measure';
 
     container.append(this.#hint, this.#label);
+    this.#unsubscribeFrame = viewer.onFrame(this.#onFrameTick);
   }
 
   get enabled(): boolean {
     return this.#enabled;
+  }
+
+  /** True while a drawn measurement is on screen (persists after measure mode ends). */
+  get hasMeasurement(): boolean {
+    return this.#markers.length > 0;
   }
 
   /** Set the unit label shown next to distances (from the manifest). */
@@ -78,6 +93,11 @@ export class MeasureTool {
     this.#onMeasure = callback;
   }
 
+  /** Callback invoked when a measurement is drawn or cleared (for UI affordances). */
+  onChange(callback: (() => void) | null): void {
+    this.#onChange = callback;
+  }
+
   /** Enter measure mode: clicks pick surface points; the label tracks the line. */
   enable(): void {
     if (this.#enabled) {
@@ -85,30 +105,33 @@ export class MeasureTool {
     }
     this.#enabled = true;
     this.#viewer.renderer.domElement.addEventListener('pointerdown', this.#onPointerDown);
-    this.#unsubscribeFrame = this.#viewer.onFrame(this.#updateLabel);
-    this.#hint.hidden = false;
+    if (!this.hasMeasurement) {
+      this.#hint.hidden = false;
+    }
   }
 
-  /** Leave measure mode and clear any drawn measurement. */
+  /** Leave measure mode. The drawn measurement stays visible (clear it explicitly). */
   disable(): void {
     if (!this.#enabled) {
       return;
     }
     this.#enabled = false;
     this.#viewer.renderer.domElement.removeEventListener('pointerdown', this.#onPointerDown);
-    this.#unsubscribeFrame?.();
-    this.#unsubscribeFrame = null;
     this.#hint.hidden = true;
-    this.reset();
   }
 
-  /** Clear picks, markers, line, and the label. */
-  reset(): void {
+  /** Remove the drawn measurement (markers, line, label) and reset picks. */
+  clear(): void {
+    const had = this.#picks.length > 0 || this.#markers.length > 0;
     this.#picks = [];
+    this.#markers = [];
     for (const child of [...this.#group.children]) {
       this.#group.remove(child);
       const withGeom = child as Mesh | Line;
-      withGeom.geometry?.dispose();
+      // Markers share MARKER_GEOMETRY (never disposed); only dispose per-object geometry.
+      if (withGeom.geometry && withGeom.geometry !== MARKER_GEOMETRY) {
+        withGeom.geometry.dispose();
+      }
       const mat = withGeom.material;
       (Array.isArray(mat) ? mat : [mat]).forEach((m) => m?.dispose());
     }
@@ -116,24 +139,19 @@ export class MeasureTool {
     if (this.#enabled) {
       this.#hint.hidden = false;
     }
+    if (had) {
+      this.#onChange?.();
+    }
   }
 
   dispose(): void {
     this.disable();
-    this.reset();
+    this.clear();
+    this.#unsubscribeFrame?.();
+    this.#unsubscribeFrame = null;
     this.#viewer.scene.remove(this.#group);
     this.#label.remove();
     this.#hint.remove();
-  }
-
-  /** Marker radius scaled to the model so points are visible but not obtrusive. */
-  #markerRadius(): number {
-    const model = this.#viewer.currentModel;
-    if (!model) {
-      return 0.2;
-    }
-    const radius = new Box3().setFromObject(model).getBoundingSphere(new Sphere()).radius;
-    return Math.max(radius * 0.012, 1e-4);
   }
 
   #onPointerDown = (event: PointerEvent): void => {
@@ -154,19 +172,21 @@ export class MeasureTool {
     }
 
     if (this.#picks.length >= 2) {
-      this.reset(); // start a fresh measurement
+      this.clear(); // start a fresh measurement
     }
     this.#picks.push(hit.point.clone());
 
-    const marker = new Mesh(
-      new SphereGeometry(this.#markerRadius(), 16, 16),
-      new MeshBasicMaterial({ color: ACCENT }),
-    );
+    const marker = new Mesh(MARKER_GEOMETRY, new MeshBasicMaterial({ color: ACCENT }));
     marker.position.copy(hit.point);
     this.#group.add(marker);
+    this.#markers.push(marker);
+    this.#scaleMarker(marker); // size correctly before the first frame
 
     if (this.#picks.length === 2) {
       this.#complete();
+    }
+    if (this.#picks.length === 1) {
+      this.#onChange?.(); // a measurement now exists (first point placed)
     }
   };
 
@@ -188,6 +208,28 @@ export class MeasureTool {
       points: [a.toArray(), b.toArray()],
     });
   }
+
+  /** World radius that projects to ~MARKER_SCREEN_PX at `point`'s depth (perspective). */
+  #screenConstantRadius(point: Vector3): number {
+    const camera = this.#viewer.camera;
+    const height = this.#viewer.renderer.domElement.clientHeight || 1;
+    const dist = camera.position.distanceTo(point);
+    const worldPerPixel = (2 * dist * Math.tan(MathUtils.degToRad(camera.fov) / 2)) / height;
+    return Math.max(MARKER_SCREEN_PX * worldPerPixel, 1e-5);
+  }
+
+  /** Scale a marker (a unit sphere) so it holds a constant on-screen size (Task 7). */
+  #scaleMarker(marker: Mesh): void {
+    marker.scale.setScalar(this.#screenConstantRadius(marker.position));
+  }
+
+  /** Per-frame: hold markers at a constant screen size and keep the label pinned. */
+  #onFrameTick = (): void => {
+    for (const marker of this.#markers) {
+      this.#scaleMarker(marker);
+    }
+    this.#updateLabel();
+  };
 
   /** Keep the label pinned to the on-screen midpoint of the measured segment. */
   #updateLabel = (): void => {
