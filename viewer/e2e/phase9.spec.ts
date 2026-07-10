@@ -54,12 +54,16 @@ test('☀ popover opens with a11y wiring and closes on Esc, returning focus', as
   await expect(page.locator('dri-viewer .light-dial')).toBeVisible();
 
   // Opening moves focus into the panel (the popover primitive's focus guarantee).
-  const focusInPanel = await page.evaluate(() => {
-    const root = document.querySelector('dri-viewer')!.shadowRoot!;
-    const panel = root.querySelector('.popover-panel')!;
-    return !!root.activeElement && panel.contains(root.activeElement);
-  });
-  expect(focusInPanel).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const root = document.querySelector('dri-viewer')!.shadowRoot!;
+        const panel = root.querySelector('.popover-trigger.light')!.closest('.popover')!
+          .querySelector('.popover-panel')!;
+        return !!root.activeElement && panel.contains(root.activeElement);
+      }),
+    )
+    .toBe(true);
 
   await page.keyboard.press('Escape');
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');

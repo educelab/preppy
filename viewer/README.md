@@ -73,6 +73,10 @@ Additional JS-only members:
   a handful of 8K variants coexist comfortably).
 - `getRenderStats()` / `getCameraState()` — diagnostics.
 
+The built-in control bar is **responsive** (it reacts to the widget's own width, not the
+page's): on a narrow embed it docks to the bottom edge, keeps the band (layer) pickers
+visible, and tucks the Tools/Light/Adjust popovers and reset-view behind a ⋯ toggle.
+
 ### Events
 
 All bubble and cross the shadow boundary (`composed`).

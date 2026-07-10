@@ -69,7 +69,7 @@ describe('Controls', () => {
     expect(trigger).not.toBeNull();
     expect(trigger.getAttribute('aria-label')).toBe('Raking light');
     // The panel exists but is hidden until the button is clicked.
-    const panel = mount.querySelector<HTMLDivElement>('.popover-panel')!;
+    const panel = trigger.closest('.popover')!.querySelector<HTMLDivElement>('.popover-panel')!;
     expect(panel.hidden).toBe(true);
     expect(mount.querySelector('.light-dial')).not.toBeNull();
     trigger.click();
@@ -200,6 +200,54 @@ describe('Controls', () => {
     adjust.click();
     expect(adjust.getAttribute('aria-expanded')).toBe('true');
     expect(light.getAttribute('aria-expanded')).toBe('false'); // opening Adjust closed Light
+  });
+
+  it('houses pan/measure/clear inside a Tools popover', () => {
+    new Controls(mount, makeHost());
+    const trigger = mount.querySelector<HTMLButtonElement>('.popover-trigger.tools')!;
+    expect(trigger.getAttribute('aria-label')).toBe('Tools');
+    const panel = trigger.closest('.popover')!;
+    expect(panel.querySelector('.tool.pan')).not.toBeNull();
+    expect(panel.querySelector('.tool.measure')).not.toBeNull();
+    expect(panel.querySelector('.measure-clear')).not.toBeNull();
+  });
+
+  it('closes the Tools popover when a tool is activated (frees the canvas)', () => {
+    const controls = new Controls(mount, makeHost());
+    const tools = mount.querySelector<HTMLButtonElement>('.popover-trigger.tools')!;
+    tools.click();
+    expect(tools.getAttribute('aria-expanded')).toBe('true');
+    mount.querySelector<HTMLButtonElement>('.tool.measure')!.click(); // turn measure ON
+    expect(tools.getAttribute('aria-expanded')).toBe('false');
+    // Turning a tool OFF (2nd click) does not reopen the popover.
+    controls.setMeasuring(true);
+    mount.querySelector<HTMLButtonElement>('.tool.measure')!.click();
+    expect(tools.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('expand toggle flips data-expanded and its aria state', () => {
+    new Controls(mount, makeHost());
+    const root = mount.querySelector<HTMLDivElement>('.ui')!;
+    const toggle = mount.querySelector<HTMLButtonElement>('.expand-toggle')!;
+    expect(root.dataset['expanded']).toBeUndefined();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    toggle.click();
+    expect(root.dataset['expanded']).toBe('true');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    toggle.click();
+    expect(root.dataset['expanded']).toBeUndefined();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('collapsing closes any open popover so it is not stranded', () => {
+    new Controls(mount, makeHost());
+    const toggle = mount.querySelector<HTMLButtonElement>('.expand-toggle')!;
+    toggle.click(); // expand
+    const light = mount.querySelector<HTMLButtonElement>('.popover-trigger.light')!;
+    light.click();
+    expect(light.getAttribute('aria-expanded')).toBe('true');
+    toggle.click(); // collapse
+    expect(light.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('removes its DOM on dispose', () => {

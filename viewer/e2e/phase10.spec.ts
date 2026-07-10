@@ -162,6 +162,7 @@ test('adjusting the albedo leaves the measurement value untouched', async ({ pag
   await loadDefault(page);
   const el = page.locator('dri-viewer');
 
+  await page.locator('dri-viewer .popover-trigger.tools').click();
   await page.locator('dri-viewer .measure').click();
   const box = (await el.boundingBox())!;
   await page.mouse.click(box.x + box.width * 0.42, box.y + box.height * 0.5);

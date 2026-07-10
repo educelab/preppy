@@ -24,6 +24,9 @@ export const CSS_TEXT = `
   min-height: 240px;
   overflow: hidden;
   contain: content;
+  /* Establish a container so the control bar can respond to the widget's own width
+     (not the page's) and dock to the bottom when embedded narrow. */
+  container-type: inline-size;
   background: #15171c;
 }
 :host([hidden]) { display: none; }
@@ -41,10 +44,12 @@ export const CSS_TEXT = `
   bottom: 14px;
   z-index: 2;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: min(320px, calc(100% - 28px));
-  padding: 13px 14px 14px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  max-width: min(560px, calc(100% - 28px));
+  padding: 10px 12px;
   color: var(--dri-ink);
   font-family: var(--dri-sans);
   font-size: 13px;
@@ -56,21 +61,38 @@ export const CSS_TEXT = `
   -webkit-backdrop-filter: blur(9px) saturate(1.1);
   animation: dri-rise 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
+.secondary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+/* The expand toggle only appears in the compact docked layout (below). The
+   .tool.expand-toggle two-class specificity beats the later single-class .tool rule. */
+.tool.expand-toggle { display: none; }
+.expand-toggle::before { display: none; }
+
+/* Tools popover body: pan/measure toggles stacked, then the conditional Clear. */
+.tools-panel { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.tools-panel .tool { justify-content: flex-start; }
+.tools-panel .measure-clear { margin-top: 2px; }
+
+/* Compact: below a widget-width breakpoint, dock the bar to the bottom edge and tuck
+   the secondary controls behind the ⋯ toggle; the band pickers stay visible. */
+@container (max-width: 460px) {
+  .ui {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-width: none;
+    justify-content: center;
+    border-radius: 12px 12px 0 0;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  .tool.expand-toggle { display: inline-flex; }
+  .ui:not([data-expanded="true"]) .secondary { display: none; }
+}
 @keyframes dri-rise {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .ui { animation: none; }
-}
-
-.group { display: flex; flex-direction: column; gap: 7px; }
-.label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--dri-dim);
 }
 
 /* Band selector: amber-outlined pills, filled when active. */
@@ -129,7 +151,6 @@ input[type="range"]::-moz-range-thumb {
 input[type="range"]:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 3px; }
 
 /* Tool toggles (Pan, Measure) + Clear (Clear appears only while a measurement is drawn). */
-.tool-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tool {
   appearance: none;
   cursor: pointer;

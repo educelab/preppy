@@ -49,7 +49,8 @@ test('renders built-in controls and measures a real cm distance', async ({ page 
   expect(diagonal.boundingDiagonal).toBeGreaterThan(10);
   expect(diagonal.boundingDiagonal).toBeLessThan(200);
 
-  // Enter measure mode and click two points on the surface.
+  // Enter measure mode (via the Tools popover) and click two points on the surface.
+  await page.locator('dri-viewer .popover-trigger.tools').click();
   await page.locator('dri-viewer .measure').click();
   await expect(page.locator('dri-viewer .measure')).toHaveAttribute('aria-pressed', 'true');
 

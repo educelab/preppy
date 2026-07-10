@@ -1,11 +1,16 @@
-// The built-in control cluster: band selector, tool row (pan/measure/clear), and
-// popover panels (Light, and — Phase 10 — Adjust).
+// The built-in control cluster: an icon bar of the band (layer) pickers plus popover
+// panels — Tools (pan/measure/clear), Light (raking "light ball"), Adjust
+// (brightness/contrast) — and a reset-view button.
 //
 // Shown by default (ui !== "none"); a host that wants its own chrome sets ui="none" and
 // drives the element via attributes/methods/events instead. The panel is decoupled from
-// the element behind ControlsHost so it stays simple and unit-testable. The raking-light
-// controls live in a popover behind a ☀ button (the "light ball", Phase 9): a
-// shaded-sphere azimuth dial + a vertical elevation slider.
+// the element behind ControlsHost so it stays simple and unit-testable.
+//
+// Responsive (Phase 11): a container query docks the bar to the bottom edge below a
+// width breakpoint. There the band pickers stay visible (the primary control) and the
+// rest tuck behind an expand toggle (⋯). The band pickers are kept INLINE rather than
+// popover-ized: the docked layout is meant to *show* them, and hiding the primary
+// layer switch behind a tap would work against feedback #5.
 
 import { LightDial } from './light-dial';
 import { PopoverButton, PopoverGroup } from './popover';
@@ -56,6 +61,9 @@ export class Controls {
   #contrastInput!: HTMLInputElement;
   #brightnessOut!: HTMLOutputElement;
   #contrastOut!: HTMLOutputElement;
+  #tools!: PopoverButton;
+  #expandToggle!: HTMLButtonElement;
+  #expanded = false;
 
   constructor(mount: ParentNode, host: ControlsHost) {
     this.#host = host;
@@ -63,25 +71,17 @@ export class Controls {
     this.#root.className = 'ui';
     this.#root.setAttribute('part', 'controls');
 
-    this.#root.append(this.buildBands(), this.buildToolRow());
+    this.#root.append(this.buildBands(), this.buildSecondary(), this.buildExpandToggle());
 
     mount.append(this.#root);
   }
 
-  private group(labelText: string): HTMLDivElement {
-    const group = document.createElement('div');
-    group.className = 'group';
-    const label = document.createElement('span');
-    label.className = 'label';
-    label.textContent = labelText;
-    group.append(label);
-    return group;
-  }
-
+  /** The band (layer) pickers — inline amber pills, the primary control (kept visible). */
   private buildBands(): HTMLDivElement {
-    const group = this.group('Band');
     const bands = document.createElement('div');
     bands.className = 'bands';
+    bands.setAttribute('role', 'group');
+    bands.setAttribute('aria-label', 'Band');
     for (const variant of this.#host.variants) {
       const button = document.createElement('button');
       button.type = 'button';
@@ -92,43 +92,13 @@ export class Controls {
       this.#bands.set(variant.id, button);
       bands.append(button);
     }
-    group.append(bands);
-    return group;
+    return bands;
   }
 
-  private buildToolRow(): HTMLDivElement {
-    const row = document.createElement('div');
-    row.className = 'tool-row';
-
-    // Pan (hand) toggle: makes left-drag pan a first-class gesture for reading the
-    // surface up close, alongside the always-on right-drag pan.
-    this.#panButton = document.createElement('button');
-    this.#panButton.type = 'button';
-    this.#panButton.className = 'tool pan';
-    this.#panButton.textContent = 'Pan';
-    this.#panButton.title = 'Pan (drag). Right-drag always pans.';
-    this.#panButton.setAttribute('aria-pressed', 'false');
-    this.#panButton.addEventListener('click', () =>
-      this.#host.setPanMode(this.#panButton.getAttribute('aria-pressed') !== 'true'),
-    );
-
-    this.#measureButton = document.createElement('button');
-    this.#measureButton.type = 'button';
-    this.#measureButton.className = 'tool measure';
-    this.#measureButton.textContent = 'Measure';
-    this.#measureButton.setAttribute('aria-pressed', 'false');
-    this.#measureButton.addEventListener('click', () =>
-      this.#host.setMeasuring(this.#measureButton.getAttribute('aria-pressed') !== 'true'),
-    );
-
-    // Clear is shown only when a measurement is on screen, so a measurement can persist
-    // through orbit/pan/zoom and be dismissed explicitly (Task 6).
-    this.#clearButton = document.createElement('button');
-    this.#clearButton.type = 'button';
-    this.#clearButton.className = 'measure-clear';
-    this.#clearButton.textContent = 'Clear';
-    this.#clearButton.hidden = true;
-    this.#clearButton.addEventListener('click', () => this.#host.clearMeasurement());
+  /** The tuck-away controls: Tools + Light + Adjust popovers and reset-view. */
+  private buildSecondary(): HTMLDivElement {
+    const secondary = document.createElement('div');
+    secondary.className = 'secondary';
 
     // Reset-view (Task 9.4): reframe the camera on the current model.
     const resetView = document.createElement('button');
@@ -139,15 +109,98 @@ export class Controls {
     resetView.title = 'Reset view';
     resetView.addEventListener('click', () => this.#host.resetView());
 
-    row.append(
-      this.#panButton,
-      this.#measureButton,
-      this.#clearButton,
+    secondary.append(
+      this.buildToolsPopover(),
       this.buildLightPopover(),
       this.buildAdjustPopover(),
       resetView,
     );
-    return row;
+    return secondary;
+  }
+
+  /** The ⊙ Tools popover: pan + measure toggles and the (conditional) Clear button. */
+  private buildToolsPopover(): HTMLDivElement {
+    this.#tools = new PopoverButton({
+      icon: '⊙',
+      label: 'Tools',
+      group: this.#popovers,
+      buttonClass: 'tools',
+    });
+
+    const head = document.createElement('div');
+    head.className = 'panel-head';
+    const title = document.createElement('span');
+    title.className = 'panel-title';
+    title.textContent = 'Tools';
+    head.append(title);
+
+    const body = document.createElement('div');
+    body.className = 'tools-panel';
+
+    // Pan (hand) toggle: makes left-drag pan a first-class gesture for reading the
+    // surface up close, alongside the always-on right-drag pan.
+    this.#panButton = document.createElement('button');
+    this.#panButton.type = 'button';
+    this.#panButton.className = 'tool pan';
+    this.#panButton.textContent = 'Pan';
+    this.#panButton.title = 'Pan (drag). Right-drag always pans.';
+    this.#panButton.setAttribute('aria-pressed', 'false');
+    this.#panButton.addEventListener('click', () => {
+      const on = this.#panButton.getAttribute('aria-pressed') !== 'true';
+      this.#host.setPanMode(on);
+      if (on) {
+        this.#tools.setOpen(false); // free the canvas for the gesture
+      }
+    });
+
+    this.#measureButton = document.createElement('button');
+    this.#measureButton.type = 'button';
+    this.#measureButton.className = 'tool measure';
+    this.#measureButton.textContent = 'Measure';
+    this.#measureButton.setAttribute('aria-pressed', 'false');
+    this.#measureButton.addEventListener('click', () => {
+      const on = this.#measureButton.getAttribute('aria-pressed') !== 'true';
+      this.#host.setMeasuring(on);
+      if (on) {
+        this.#tools.setOpen(false); // free the canvas for picking points
+      }
+    });
+
+    // Clear is shown only when a measurement is on screen, so a measurement can persist
+    // through orbit/pan/zoom and be dismissed explicitly (Task 6).
+    this.#clearButton = document.createElement('button');
+    this.#clearButton.type = 'button';
+    this.#clearButton.className = 'measure-clear';
+    this.#clearButton.textContent = 'Clear measurement';
+    this.#clearButton.hidden = true;
+    this.#clearButton.addEventListener('click', () => this.#host.clearMeasurement());
+
+    body.append(this.#panButton, this.#measureButton, this.#clearButton);
+    this.#tools.panel.append(head, body);
+    return this.#tools.root;
+  }
+
+  /** The ⋯ expand toggle: reveals the tuck-away controls in the compact docked layout. */
+  private buildExpandToggle(): HTMLButtonElement {
+    this.#expandToggle = document.createElement('button');
+    this.#expandToggle.type = 'button';
+    this.#expandToggle.className = 'tool expand-toggle';
+    this.#expandToggle.textContent = '⋯';
+    this.#expandToggle.setAttribute('aria-label', 'More controls');
+    this.#expandToggle.setAttribute('aria-expanded', 'false');
+    this.#expandToggle.addEventListener('click', () => this.#setExpanded(!this.#expanded));
+    return this.#expandToggle;
+  }
+
+  #setExpanded(on: boolean): void {
+    this.#expanded = on;
+    this.#expandToggle.setAttribute('aria-expanded', String(on));
+    if (on) {
+      this.#root.dataset['expanded'] = 'true';
+    } else {
+      delete this.#root.dataset['expanded'];
+      this.#popovers.closeAll(); // collapsing hides the triggers; don't strand a popover
+    }
   }
 
   /** The ☀ Light popover: the shaded-sphere azimuth dial + a vertical elevation slider. */
@@ -354,6 +407,7 @@ export class Controls {
   }
 
   dispose(): void {
+    this.#tools?.dispose();
     this.#light?.dispose();
     this.#dial?.dispose();
     this.#adjust?.dispose();

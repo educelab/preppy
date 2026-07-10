@@ -31,6 +31,15 @@ export class PopoverGroup {
       }
     }
   }
+
+  /** Close every open popover in the group. */
+  closeAll(): void {
+    for (const member of this.#members) {
+      if (member.open) {
+        member.setOpen(false);
+      }
+    }
+  }
 }
 
 export interface PopoverButtonOptions {
