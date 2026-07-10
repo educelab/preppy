@@ -3,7 +3,10 @@
 **Track ID:** viewer-widget_20260706
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-07-06
-**Status:** [~] Reopened 2026-07-10 for post-delivery feedback (Phases 5–11); Phases 1–4 complete 2026-07-09
+**Status:** [~] Reopened 2026-07-10 for post-delivery feedback (Phases 5–11); Phases 1–4
+complete 2026-07-09. **Phases 5–11 all implemented + headless-verified 2026-07-10**
+(unsigned commits — 1Password SSH signing unavailable in the automation context; re-sign
+on review). Awaiting user phase-gate approval and commit re-signing.
 
 ## Overview
 Scaffold the TS/bundler/web-component skeleton, get one variant rendering, then
@@ -237,19 +240,31 @@ popover primitive. **Design confirmed with the user:**
       new-manifest clears, panel slider + Reset, measurement value untouched, ui="none"
       hides ◑ with API live). Added Viewer.samplePixel diagnostic for readback.
 
-## Phase 11: Responsive control panel (feedback #5) — viewer
+## Phase 11: Responsive control panel (feedback #5) — viewer — COMPLETE
+_Design note: kept the band (layer) pickers **inline** rather than popover-izing them —
+the docked mode is meant to surface them, and hiding the primary layer switch behind a
+tap works against feedback #5. Converted **Pan/Measure/Clear** into a "Tools" popover so
+the rest of the bar is uniformly icon-buttons + popovers. Docking uses a `@container`
+query on the widget's own width (not the page's)._
 Below a width breakpoint, dock the panel to the bottom showing only the band
 (layer) pickers; tuck the rest behind popover buttons. Now that Phase 9 provides a
 reusable popover primitive, convert Bands and Measure/Pan to it too so the whole
 bar is icon-buttons + popovers.
 ### Tasks
-- [ ] Task 11.1: Container-query/media-query layout in `styles.ts`; a compact
-      docked mode + an expand toggle in `controls.ts`.
-- [ ] Task 11.2: Convert Bands and Measure/Pan to the popover primitive; ensure the
-      measure hint/label, Light + Adjust panels, and reset-view all work docked.
+- [x] Task 11.1: Container-query layout in `styles.ts` (`@container (max-width: 460px)`
+      docks the bar to the bottom edge); a compact docked mode + an expand toggle (⋯)
+      in `controls.ts`.
+- [x] Task 11.2: Convert Measure/Pan (+Clear) to a "Tools" popover; band pickers kept
+      inline (design note above); ensure the measure hint/label, Light + Adjust panels,
+      and reset-view all work docked.
 ### Verification
-- [ ] Headless screenshots at wide + narrow viewports; controls reachable in both;
-      no horizontal overflow; popovers open/dismiss correctly when docked.
+- [x] Headless at wide + narrow viewports; controls reachable in both; no horizontal
+      overflow; popovers open/dismiss correctly when docked. Verified: typecheck clean,
+      66 unit (16 controls incl. Tools popover + expand toggle) + e2e/phase11.spec.ts
+      (3 tests: wide inline / no toggle, narrow docked bar geometry + bands reachable,
+      expand reveals + popover open/Esc/collapse). Full e2e green per-spec
+      (phase1–4,7,9,10,11 + embed against the built bundle). Caught + fixed a stray
+      backtick in a styles.ts CSS comment that closed the template literal early.
 
 ---
 

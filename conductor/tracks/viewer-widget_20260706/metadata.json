@@ -4,12 +4,12 @@
   "type": "feature",
   "status": "in_progress",
   "created": "2026-07-06T18:56:11Z",
-  "updated": "2026-07-10T19:15:00Z",
+  "updated": "2026-07-10T20:00:00Z",
   "depends_on": ["toolchain-spike_20260706", "delivery-pipeline_20260706"],
   "current_phase": 11,
-  "current_task": "11.1",
-  "phases": { "total": 11, "completed": 10 },
-  "tasks": { "total": 30, "completed": 28 },
+  "current_task": "11.2",
+  "phases": { "total": 11, "completed": 11 },
+  "tasks": { "total": 30, "completed": 30 },
   "commits": [
     "e8f697b: viewer: scaffold TS + Vite web-component bundle",
     "0609c16: viewer: <dri-viewer> custom-element skeleton + test harness",
@@ -30,6 +30,8 @@
     "a6ab26b: viewer: Light popover + reset-view, raking-change event (Phase 9, Tasks 9.3/9.4)",
     "5874730: viewer: display-space albedo brightness/contrast shader module (Phase 10, Task 10.1)",
     "4355a1d: viewer: per-variant image adjust state + API + event (Phase 10, Task 10.2)",
-    "19aac0f: viewer: Adjust panel + samplePixel diagnostic (Phase 10, Task 10.3)"
+    "19aac0f: viewer: Adjust panel + samplePixel diagnostic (Phase 10, Task 10.3)",
+    "8dc8487: chore: Phase 10 complete, advance viewer-widget to Phase 11",
+    "8830a70: viewer: responsive docked control bar + Tools popover (Phase 11, Tasks 11.1/11.2)"
   ]
 }
