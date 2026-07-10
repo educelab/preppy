@@ -219,7 +219,7 @@ popover primitive. **Design confirmed with the user:**
   variant), mirroring `setRakingLight`; emit an `image-adjust-change` CustomEvent;
   `ui="none"` hides the panel. No new HTML attributes for transient state.
 ### Tasks
-- [ ] Task 10.1: Per-material albedo brightness/contrast shader (`onBeforeCompile`,
+- [x] Task 10.1: Per-material albedo brightness/contrast shader (`onBeforeCompile`,
       display-space, identity at 0) applied to base mesh material(s) only; unit test
       the formula (identity at 0, monotonicity).
 - [ ] Task 10.2: Per-variant in-memory state keyed by variant id — reapply on
