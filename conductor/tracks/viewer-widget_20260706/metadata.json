@@ -17,6 +17,6 @@
     "7391425: viewer: Playwright headless WebGL verification harness",
     "2805fc7: viewer: load manifest + render default variant (Phase 2)",
     "cf7f2e5: viewer: camera-preserving variant switch + cache/preload (Phase 3)",
-    "pending: viewer: measurement + raking light + embedding (Phase 4)"
+    "1876a1a: viewer: measurement + raking light + embedding (Phase 4)"
   ]
 }
