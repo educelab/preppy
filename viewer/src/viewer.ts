@@ -285,6 +285,24 @@ export class Viewer {
     }
   }
 
+  /**
+   * Read one framebuffer pixel (RGBA 0–255) at normalized canvas coordinates
+   * (0,0 = top-left, 1,1 = bottom-right), for headless verification. Renders once and
+   * reads immediately (before the next clear), so it works without preserveDrawingBuffer.
+   */
+  samplePixel(nx: number, ny: number): [number, number, number, number] {
+    this.renderer.render(this.scene, this.camera);
+    const gl = this.renderer.getContext();
+    const w = this.renderer.domElement.width;
+    const h = this.renderer.domElement.height;
+    const x = Math.min(w - 1, Math.max(0, Math.floor(nx * w)));
+    // GL's framebuffer origin is bottom-left; flip y so callers think top-left.
+    const y = Math.min(h - 1, Math.max(0, Math.floor((1 - ny) * h)));
+    const px = new Uint8Array(4);
+    gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    return [px[0]!, px[1]!, px[2]!, px[3]!];
+  }
+
   /** Camera + controls state, for the camera-preservation invariant check (Task 3.3). */
   getCameraState(): { position: number[]; quaternion: number[]; target: number[] } {
     return {

@@ -5,25 +5,30 @@ function makeHost(overrides: Partial<ControlsHost> = {}): ControlsHost & {
   selected: string[];
   raked: Array<[number, number]>;
   measured: boolean[];
+  adjusted: Array<{ brightness: number; contrast: number }>;
 } {
   const selected: string[] = [];
   const raked: Array<[number, number]> = [];
   const measured: boolean[] = [];
+  const adjusted: Array<{ brightness: number; contrast: number }> = [];
   return {
     variants: [
       { id: 'rgb', label: 'RGB' },
       { id: 'ir1050', label: 'IR 1050nm' },
     ],
     raking: { azimuth: 45, elevation: 22 },
+    imageAdjust: { brightness: 0, contrast: 0 },
     selectVariant: (id) => selected.push(id),
     setRakingLight: (az, el) => raked.push([az, el]),
     setMeasuring: (on) => measured.push(on),
     clearMeasurement: () => {},
     setPanMode: () => {},
     resetView: () => {},
+    setImageAdjust: (a) => adjusted.push(a),
     selected,
     raked,
     measured,
+    adjusted,
     ...overrides,
   };
 }
@@ -147,6 +152,54 @@ describe('Controls', () => {
     expect(cleared).toEqual([1]);
     controls.setHasMeasurement(false);
     expect(clear.hidden).toBe(true);
+  });
+
+  it('houses brightness/contrast in an Adjust popover behind the ◑ button', () => {
+    const host = makeHost({ imageAdjust: { brightness: 20, contrast: -10 } });
+    new Controls(mount, host);
+    const trigger = mount.querySelector<HTMLButtonElement>('.popover-trigger.adjust')!;
+    expect(trigger.getAttribute('aria-label')).toBe('Image adjust');
+    const sliders = mount.querySelectorAll<HTMLInputElement>('.adjust-panel input[type="range"]');
+    expect(sliders).toHaveLength(2);
+    expect(sliders[0]!.value).toBe('20'); // brightness seeded
+    expect(sliders[1]!.value).toBe('-10'); // contrast seeded
+
+    sliders[0]!.value = '55';
+    sliders[0]!.dispatchEvent(new Event('input'));
+    expect(host.adjusted.at(-1)).toEqual({ brightness: 55, contrast: -10 });
+  });
+
+  it('Adjust Reset zeroes brightness and contrast', () => {
+    const host = makeHost({ imageAdjust: { brightness: 40, contrast: 30 } });
+    new Controls(mount, host);
+    // The Adjust panel's Reset is the 2nd .panel-reset (Light is 1st).
+    const resets = mount.querySelectorAll<HTMLButtonElement>('.panel-reset');
+    resets[1]!.click();
+    expect(host.adjusted.at(-1)).toEqual({ brightness: 0, contrast: 0 });
+    const sliders = mount.querySelectorAll<HTMLInputElement>('.adjust-panel input[type="range"]');
+    expect(sliders[0]!.value).toBe('0');
+    expect(sliders[1]!.value).toBe('0');
+  });
+
+  it('reflects a variant switch into the Adjust sliders without calling the host', () => {
+    const host = makeHost();
+    const controls = new Controls(mount, host);
+    controls.setImageAdjust({ brightness: -25, contrast: 15 });
+    const sliders = mount.querySelectorAll<HTMLInputElement>('.adjust-panel input[type="range"]');
+    expect(sliders[0]!.value).toBe('-25');
+    expect(sliders[1]!.value).toBe('15');
+    expect(host.adjusted).toHaveLength(0); // reflection only, no host round-trip
+  });
+
+  it('Light and Adjust popovers are mutually exclusive', () => {
+    new Controls(mount, makeHost());
+    const light = mount.querySelector<HTMLButtonElement>('.popover-trigger.light')!;
+    const adjust = mount.querySelector<HTMLButtonElement>('.popover-trigger.adjust')!;
+    light.click();
+    expect(light.getAttribute('aria-expanded')).toBe('true');
+    adjust.click();
+    expect(adjust.getAttribute('aria-expanded')).toBe('true');
+    expect(light.getAttribute('aria-expanded')).toBe('false'); // opening Adjust closed Light
   });
 
   it('removes its DOM on dispose', () => {

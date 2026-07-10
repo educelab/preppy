@@ -9,6 +9,7 @@
 
 import { LightDial } from './light-dial';
 import { PopoverButton, PopoverGroup } from './popover';
+import type { ImageAdjust } from './image-adjust';
 
 /** Raking-light default when the Light panel is reset (matches Viewer's initial rig). */
 const RAKING_DEFAULT = { azimuth: 45, elevation: 22 };
@@ -31,6 +32,10 @@ export interface ControlsHost {
   setPanMode(on: boolean): void;
   /** Reframe the camera on the current model (reset view). */
   resetView(): void;
+  /** Initial brightness/contrast for the active variant (slider units). */
+  readonly imageAdjust: ImageAdjust;
+  /** Set the active variant's brightness/contrast. */
+  setImageAdjust(adjust: ImageAdjust): void;
 }
 
 export class Controls {
@@ -46,6 +51,11 @@ export class Controls {
   #elInput!: HTMLInputElement;
   #azReadout!: HTMLSpanElement;
   #elReadout!: HTMLSpanElement;
+  #adjust!: PopoverButton;
+  #brightnessInput!: HTMLInputElement;
+  #contrastInput!: HTMLInputElement;
+  #brightnessOut!: HTMLOutputElement;
+  #contrastOut!: HTMLOutputElement;
 
   constructor(mount: ParentNode, host: ControlsHost) {
     this.#host = host;
@@ -134,6 +144,7 @@ export class Controls {
       this.#measureButton,
       this.#clearButton,
       this.buildLightPopover(),
+      this.buildAdjustPopover(),
       resetView,
     );
     return row;
@@ -235,6 +246,91 @@ export class Controls {
     this.#applyRaking(RAKING_DEFAULT.azimuth, RAKING_DEFAULT.elevation);
   }
 
+  /** The ◑ Adjust popover: per-variant brightness + contrast sliders (−100…+100). */
+  private buildAdjustPopover(): HTMLDivElement {
+    this.#adjust = new PopoverButton({
+      icon: '◑',
+      label: 'Image adjust',
+      group: this.#popovers,
+      buttonClass: 'adjust',
+    });
+
+    const head = document.createElement('div');
+    head.className = 'panel-head';
+    const title = document.createElement('span');
+    title.className = 'panel-title';
+    title.textContent = 'Image adjust';
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'panel-reset';
+    reset.textContent = 'Reset';
+    reset.addEventListener('click', () => this.#resetAdjust());
+    head.append(title, reset);
+
+    const body = document.createElement('div');
+    body.className = 'adjust-panel';
+    // Double-click anywhere in the body resets (image-editor convention).
+    body.addEventListener('dblclick', () => this.#resetAdjust());
+
+    const b = this.#adjustSlider('Brightness', this.#host.imageAdjust.brightness);
+    const c = this.#adjustSlider('Contrast', this.#host.imageAdjust.contrast);
+    this.#brightnessInput = b.input;
+    this.#brightnessOut = b.output;
+    this.#contrastInput = c.input;
+    this.#contrastOut = c.output;
+    body.append(b.row, c.row);
+
+    this.#adjust.panel.append(head, body);
+    return this.#adjust.root;
+  }
+
+  /** A labelled −100…+100 adjust slider (0 = identity) wired to the single sink. */
+  #adjustSlider(
+    name: string,
+    value: number,
+  ): { row: HTMLDivElement; input: HTMLInputElement; output: HTMLOutputElement } {
+    const row = document.createElement('div');
+    row.className = 'adjust-row';
+    const tag = document.createElement('span');
+    tag.className = 'adjust-tag';
+    tag.textContent = name;
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = '-100';
+    input.max = '100';
+    input.value = String(Math.round(value));
+    input.setAttribute('aria-label', name);
+    const output = document.createElement('output');
+    output.textContent = String(Math.round(value));
+    input.addEventListener('input', () => this.#applyAdjust());
+    row.append(tag, input, output);
+    return { row, input, output };
+  }
+
+  /** Push brightness/contrast to the host and refresh the readouts (single sink). */
+  #applyAdjust(): void {
+    const brightness = Number(this.#brightnessInput.value);
+    const contrast = Number(this.#contrastInput.value);
+    this.#brightnessOut.textContent = String(brightness);
+    this.#contrastOut.textContent = String(contrast);
+    this.#host.setImageAdjust({ brightness, contrast });
+  }
+
+  /** Zero the active variant's brightness/contrast. */
+  #resetAdjust(): void {
+    this.#brightnessInput.value = '0';
+    this.#contrastInput.value = '0';
+    this.#applyAdjust();
+  }
+
+  /** Reflect the active variant's brightness/contrast into the sliders (no host call). */
+  setImageAdjust(adjust: ImageAdjust): void {
+    this.#brightnessInput.value = String(Math.round(adjust.brightness));
+    this.#contrastInput.value = String(Math.round(adjust.contrast));
+    this.#brightnessOut.textContent = String(Math.round(adjust.brightness));
+    this.#contrastOut.textContent = String(Math.round(adjust.contrast));
+  }
+
   /** Show/hide the Clear button to match whether a measurement is drawn. */
   setHasMeasurement(has: boolean): void {
     this.#clearButton.hidden = !has;
@@ -260,6 +356,7 @@ export class Controls {
   dispose(): void {
     this.#light?.dispose();
     this.#dial?.dispose();
+    this.#adjust?.dispose();
     this.#root.remove();
   }
 }

@@ -290,6 +290,19 @@ input[type="range"]:focus-visible { outline: 2px solid var(--dri-accent); outlin
 }
 .light-readout .dim { color: var(--dri-dim); }
 
+/* --- Image-adjust panel: brightness + contrast sliders -------------------- */
+.adjust-panel { display: flex; flex-direction: column; gap: 12px; min-width: 190px; }
+.adjust-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 8px; }
+.adjust-tag { font-size: 11px; color: var(--dri-dim); }
+.adjust-row output {
+  font-family: var(--dri-mono);
+  font-size: 11px;
+  color: var(--dri-ink);
+  text-align: right;
+  min-width: 2.6em;
+}
+.adjust-row input[type="range"] { grid-column: 1 / -1; }
+
 /* --- Floating measurement label ------------------------------------------- */
 .measure-label {
   position: absolute;

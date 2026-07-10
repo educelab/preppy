@@ -188,6 +188,11 @@ export class DriViewer extends HTMLElement {
     return this.#viewer?.getCameraState() ?? null;
   }
 
+  /** Read one framebuffer pixel (RGBA 0–255) at normalized coords; null if not rendering. */
+  samplePixel(nx: number, ny: number): [number, number, number, number] | null {
+    return this.#viewer?.samplePixel(nx, ny) ?? null;
+  }
+
   /** Number of variant models currently resident in the cache (diagnostics / tests). */
   get cachedVariantCount(): number {
     return this.#cache.size;
@@ -362,6 +367,8 @@ export class DriViewer extends HTMLElement {
     viewer.setModel(model, { frame });
     this.#activeVariantId = variant.id;
     this.#controls?.setActiveVariant(variant.id);
+    // Reflect this variant's stored brightness/contrast into the Adjust panel.
+    this.#controls?.setImageAdjust(this.getImageAdjust());
     if (this.getAttribute('variant') !== variant.id) {
       this.setAttribute('variant', variant.id); // reflect for deep-linking (guarded above)
     }
@@ -610,6 +617,8 @@ export class DriViewer extends HTMLElement {
       clearMeasurement: () => this.clearMeasurement(),
       setPanMode: (on) => this.setPanMode(on),
       resetView: () => this.resetView(),
+      imageAdjust: this.getImageAdjust(),
+      setImageAdjust: (adjust) => this.setImageAdjust(adjust),
     });
     if (this.#activeVariantId) {
       this.#controls.setActiveVariant(this.#activeVariantId);

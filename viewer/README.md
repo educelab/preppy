@@ -65,6 +65,10 @@ Additional JS-only members:
   ☀ "light ball" popover: drag the shaded sphere to set azimuth, the vertical slider sets
   elevation (sliding the puck radially), Reset returns to az 45° / el 22°.
 - `resetView()` — reframe the camera on the current model (the built-in ⤢ button).
+- `setImageAdjust({ brightness, contrast })` / `getImageAdjust()` — per-variant runtime
+  brightness/contrast on the mesh albedo (slider units −100…+100, 0 = identity). In-memory
+  and keyed by variant id: kept when toggling variants, cleared on a new manifest. Exposed
+  in the UI as a ◑ popover; measurement overlays and the raking response are unaffected.
 - `maxCachedVariants: number` — cap resident variant models (0 = keep all, the default;
   a handful of 8K variants coexist comfortably).
 - `getRenderStats()` / `getCameraState()` — diagnostics.
@@ -78,6 +82,7 @@ All bubble and cross the shadow boundary (`composed`).
 | `variant-change` | `{ id }` | A variant becomes active (initial load or switch). |
 | `measure`        | `{ distance, unit, points }` | A two-point measurement completes (`distance` in manifest units, e.g. cm). |
 | `raking-change`  | `{ azimuth, elevation }` | The raking light is re-aimed (degrees). Lets `ui="none"` hosts track light state. |
+| `image-adjust-change` | `{ id, brightness, contrast }` | The active variant's brightness/contrast changed (slider units). |
 | `error`          | `{ error }` | WebGL init or a load fails (the element stays mounted). |
 
 ## Manifest

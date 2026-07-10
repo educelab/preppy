@@ -129,7 +129,7 @@ test('Reset restores default az 45° / el 22°', async ({ page }) => {
   await elevation.fill('70');
   await elevation.dispatchEvent('input');
 
-  await page.locator('dri-viewer .panel-reset').click();
+  await page.locator('dri-viewer .panel-reset').first().click(); // Light panel's Reset
   expect(await getRaking(page)).toEqual({ azimuth: 45, elevation: 22 });
 });
 
