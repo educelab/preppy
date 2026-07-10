@@ -202,7 +202,7 @@ closes the others), `aria-expanded`/`aria-haspopup`.
       6 tests). Mutual-exclusion covered by popover unit tests; the second built-in
       popover (Adjust) arrives in Phase 10 for a full cross-popover e2e.
 
-## Phase 10: Image brightness/contrast adjust (feedback, 2026-07-10 grill) — viewer
+## Phase 10: Image brightness/contrast adjust (feedback, 2026-07-10 grill) — viewer — COMPLETE
 Per-variant runtime brightness/contrast corrective for the visible base mesh (some
 textures differ in brightness). Behind a ◑ "tune" icon button, using the Phase 9
 popover primitive. **Design confirmed with the user:**
@@ -225,13 +225,17 @@ popover primitive. **Design confirmed with the user:**
 - [x] Task 10.2: Per-variant in-memory state keyed by variant id — reapply on
       variant switch, reset on new manifest; `setImageAdjust`/`getImageAdjust` +
       `image-adjust-change`; `ui="none"` support.
-- [ ] Task 10.3: Adjust panel behind the ◑ button (brightness + contrast sliders,
+- [x] Task 10.3: Adjust panel behind the ◑ button (brightness + contrast sliders,
       Reset) via the popover primitive.
 ### Verification
-- [ ] Headless pixel sampling: adjustments change the mesh albedo but leave
+- [x] Headless pixel sampling: adjustments change the mesh albedo but leave
       measurement overlays unchanged; per-variant values persist across switches and
       reset on new manifest; Reset zeroes the current variant. Formula + state unit
-      tests green.
+      tests green. Verified: typecheck clean, 62 unit (16 controls + 7 image-adjust +
+      formula/monotonicity + API contract) + e2e/phase10.spec.ts (6 tests: brightness
+      raises/lowers luminance via framebuffer readback, per-variant persist+restore,
+      new-manifest clears, panel slider + Reset, measurement value untouched, ui="none"
+      hides ◑ with API live). Added Viewer.samplePixel diagnostic for readback.
 
 ## Phase 11: Responsive control panel (feedback #5) — viewer
 Below a width breakpoint, dock the panel to the bottom showing only the band
