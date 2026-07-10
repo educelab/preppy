@@ -45,12 +45,22 @@ test('renders the default variant from a real manifest, framed and textured', as
   const el = page.locator('dri-viewer');
   await expect(el).toHaveJSProperty('activeVariant', 'rgb');
 
-  // Give the render loop a couple of frames so renderer.info reflects the drawn mesh.
-  await page.waitForTimeout(300);
+  // renderer.info reflects the last drawn frame, so poll until a frame with the mesh
+  // has been rendered rather than waiting a fixed time (headless rAF can throttle).
+  await expect
+    .poll(
+      () =>
+        el.evaluate(
+          (node) =>
+            (node as unknown as { getRenderStats(): { triangles: number } }).getRenderStats()
+              .triangles,
+        ),
+      { timeout: 10_000 },
+    )
+    .toBeGreaterThan(0);
   const stats = await el.evaluate((node) =>
     (node as unknown as { getRenderStats(): unknown }).getRenderStats(),
   );
-  expect(stats, 'render stats available').not.toBeNull();
   const s = stats as {
     triangles: number;
     textures: number;
@@ -59,7 +69,6 @@ test('renders the default variant from a real manifest, framed and textured', as
     cameraDistance: number;
   };
   expect(s.meshCount, 'at least one mesh in the scene').toBeGreaterThan(0);
-  expect(s.triangles, 'geometry is being rendered').toBeGreaterThan(0);
   expect(s.textures, 'embedded KTX2 texture uploaded').toBeGreaterThan(0);
   expect(s.hasTexturedMaterial, 'material has a base-color map').toBe(true);
   // Camera framed on load: a finite, positive eye→target distance (not the 60u default

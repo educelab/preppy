@@ -9,7 +9,12 @@ import { defineDriViewer } from './dri-viewer';
 export const VERSION = '0.1.0';
 
 export { DriViewer, defineDriViewer } from './dri-viewer';
-export type { VariantChangeDetail, VariantChangeEvent } from './dri-viewer';
+export type {
+  VariantChangeDetail,
+  VariantChangeEvent,
+  MeasureEvent,
+} from './dri-viewer';
+export type { MeasureResult } from './measure';
 export type { Manifest, Variant } from './manifest';
 
 defineDriViewer();

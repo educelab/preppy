@@ -6,6 +6,9 @@
 
 import type { Object3D } from 'three';
 import { Viewer } from './viewer';
+import { CSS_TEXT } from './styles';
+import { Controls } from './controls';
+import { MeasureTool, type MeasureResult } from './measure';
 import {
   type Manifest,
   type Variant,
@@ -23,34 +26,10 @@ export interface VariantChangeDetail {
 /** Typed `variant-change` CustomEvent. */
 export type VariantChangeEvent = CustomEvent<VariantChangeDetail>;
 
-const TAG_NAME = 'dri-viewer';
+/** Typed `measure` CustomEvent, dispatched when a two-point measurement completes. */
+export type MeasureEvent = CustomEvent<MeasureResult>;
 
-// Host sizing: the element is a block that the host page sizes (width/height via
-// CSS). The stage fills it and hosts the renderer canvas. `position: relative` so
-// absolutely-positioned overlays (controls, measurement labels) anchor to the stage.
-const STYLE = `
-:host {
-  display: block;
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 240px;
-  overflow: hidden;
-  contain: content;
-  background: #15171c;
-}
-:host([hidden]) { display: none; }
-.stage {
-  position: absolute;
-  inset: 0;
-}
-.stage canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  touch-action: none;
-}
-`;
+const TAG_NAME = 'dri-viewer';
 
 let sheet: CSSStyleSheet | null = null;
 
@@ -68,12 +47,12 @@ function applyStyle(root: ShadowRoot): void {
   if (supportsAdopted()) {
     if (!sheet) {
       sheet = new CSSStyleSheet();
-      sheet.replaceSync(STYLE);
+      sheet.replaceSync(CSS_TEXT);
     }
     root.adoptedStyleSheets = [sheet];
   } else {
     const el = document.createElement('style');
-    el.textContent = STYLE;
+    el.textContent = CSS_TEXT;
     root.append(el);
   }
 }
@@ -104,6 +83,12 @@ export class DriViewer extends HTMLElement {
   readonly #cache = new Map<string, Object3D>();
   /** Cache cap; 0 (default) keeps every variant resident. See `maxCachedVariants`. */
   #maxCached = 0;
+
+  /** Built-in control cluster (null when ui="none" or before a manifest loads). */
+  #controls: Controls | null = null;
+  /** Two-point measurement tool (created with the Viewer). */
+  #measure: MeasureTool | null = null;
+  #measuring = false;
 
   constructor() {
     super();
@@ -212,10 +197,16 @@ export class DriViewer extends HTMLElement {
       this.emitError(error);
       return;
     }
+    this.#measure = new MeasureTool(this.#viewer, this.#stage);
+    this.#measure.onMeasure((result) => this.#onMeasureComplete(result));
     void this.reload();
   }
 
   disconnectedCallback(): void {
+    this.#destroyControls();
+    this.#measure?.dispose();
+    this.#measure = null;
+    this.#measuring = false;
     this.#clearCache();
     this.#viewer?.dispose();
     this.#viewer = null;
@@ -239,8 +230,11 @@ export class DriViewer extends HTMLElement {
       if (newValue && newValue !== this.#activeVariantId) {
         void this.switchTo(newValue);
       }
+    } else if (name === 'ui') {
+      if (this.#manifest) {
+        this.#syncControls();
+      }
     }
-    // `ui` is wired in Phase 4.
   }
 
   // --- Loading --------------------------------------------------------------
@@ -272,6 +266,8 @@ export class DriViewer extends HTMLElement {
       } else {
         return; // nothing to load yet
       }
+      this.#measure?.setUnit(this.#manifest.units);
+      this.#syncControls();
       await this.showVariant(this.variant || undefined, { frame: true, token });
       this.#preloadOthers(token);
     } catch (error) {
@@ -318,6 +314,7 @@ export class DriViewer extends HTMLElement {
     }
     viewer.setModel(model, { frame });
     this.#activeVariantId = variant.id;
+    this.#controls?.setActiveVariant(variant.id);
     if (this.getAttribute('variant') !== variant.id) {
       this.setAttribute('variant', variant.id); // reflect for deep-linking (guarded above)
     }
@@ -391,6 +388,85 @@ export class DriViewer extends HTMLElement {
     this.#cache.clear();
   }
 
+  // --- Measurement & lighting ----------------------------------------------
+
+  /** Whether two-point measure mode is active. */
+  get measuring(): boolean {
+    return this.#measuring;
+  }
+
+  /** Enter/leave two-point measure mode (clicks pick surface points → distance in cm). */
+  setMeasuring(on: boolean): void {
+    if (!this.#measure || on === this.#measuring) {
+      return;
+    }
+    this.#measuring = on;
+    if (on) {
+      this.#measure.enable();
+    } else {
+      this.#measure.disable();
+    }
+    this.#stage.dataset['measuring'] = String(on);
+    this.#controls?.setMeasuring(on);
+  }
+
+  /**
+   * Aim the raking key light. `azimuth` sweeps around the surface normal (deg); low
+   * `elevation` (deg, grazing) exaggerates relief. No-op if not rendering.
+   */
+  setRakingLight(azimuth: number, elevation: number): void {
+    this.#viewer?.setRakingLight(azimuth, elevation);
+  }
+
+  /** Current raking-light angles (degrees), or null if not rendering. */
+  getRakingLight(): { azimuth: number; elevation: number } | null {
+    return this.#viewer?.getRakingLight() ?? null;
+  }
+
+  #onMeasureComplete(result: MeasureResult): void {
+    this.dispatchEvent(
+      new CustomEvent<MeasureResult>('measure', {
+        detail: result,
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  // --- Built-in controls ----------------------------------------------------
+
+  /** True unless the `ui` attribute opts out of built-in chrome (ui="none"). */
+  #wantsControls(): boolean {
+    return !this.ui.split(/\s+/).includes('none');
+  }
+
+  /** Build, rebuild, or tear down the control cluster to match manifest + ui state. */
+  #syncControls(): void {
+    this.#destroyControls();
+    if (!this.#viewer || !this.#manifest || !this.#wantsControls()) {
+      return;
+    }
+    const raking = this.#viewer.getRakingLight();
+    this.#controls = new Controls(this.#stage, {
+      variants: this.#manifest.variants.map((v) => ({ id: v.id, label: v.label })),
+      raking,
+      selectVariant: (id) => {
+        this.variant = id;
+      },
+      setRakingLight: (az, el) => this.setRakingLight(az, el),
+      setMeasuring: (on) => this.setMeasuring(on),
+    });
+    if (this.#activeVariantId) {
+      this.#controls.setActiveVariant(this.#activeVariantId);
+    }
+    this.#controls.setMeasuring(this.#measuring);
+  }
+
+  #destroyControls(): void {
+    this.#controls?.dispose();
+    this.#controls = null;
+  }
+
   // --- Events ---------------------------------------------------------------
 
   /** Dispatch a composed, bubbling `error` event carrying the underlying error. */
@@ -432,5 +508,6 @@ declare global {
   }
   interface HTMLElementEventMap {
     'variant-change': VariantChangeEvent;
+    measure: MeasureEvent;
   }
 }

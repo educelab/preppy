@@ -105,11 +105,18 @@ test('all variants coexist without OOM or context loss', async ({ page }) => {
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __variants: string[] }).__variants))
       .toContain(id);
-    await page.waitForTimeout(150);
-    const stats = (await el.evaluate((n) =>
-      (n as unknown as { getRenderStats(): { triangles: number } }).getRenderStats(),
-    )) as { triangles: number };
-    expect(stats.triangles, `still rendering after switching to ${id}`).toBeGreaterThan(0);
+    // Poll for a rendered frame (renderer.info is per-frame; headless rAF can throttle).
+    await expect
+      .poll(
+        () =>
+          el.evaluate(
+            (n) =>
+              (n as unknown as { getRenderStats(): { triangles: number } }).getRenderStats()
+                .triangles,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBeGreaterThan(0);
   }
 
   // Preload + cycling leave all variants resident, and several 8K textures uploaded.

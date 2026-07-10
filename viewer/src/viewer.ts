@@ -10,6 +10,7 @@ import {
   Color,
   HemisphereLight,
   DirectionalLight,
+  MathUtils,
   Material,
   Mesh,
   type Object3D,
@@ -66,6 +67,13 @@ export class Viewer {
   #frame = 0;
   #disposed = false;
   #currentModel: Object3D | null = null;
+  #modelCenter = new Vector3();
+  /** Controllable grazing "raking" light for revealing surface relief (Task 4.2). */
+  #rakingLight!: DirectionalLight;
+  #rakingAzimuth = 45;
+  #rakingElevation = 22;
+  /** Per-frame callbacks (e.g. keeping the measurement label pinned to the line). */
+  readonly #frameCallbacks = new Set<() => void>();
 
   constructor(container: HTMLElement, options: ViewerOptions = {}) {
     this.#container = container;
@@ -104,17 +112,56 @@ export class Viewer {
   }
 
   /**
-   * Default light rig: hemisphere fill + a directional key. Tuned for reading a papyrus
-   * surface; Task 2.3 refines against real data and Task 4.2 adds a raking-light control.
+   * Light rig: a hemisphere fill so the surface is never black, plus a controllable
+   * grazing "raking" key light that reveals relief (fibres, script, damage) — the
+   * scholarly reason a raking control exists. The raking light aims at the model centre
+   * so its azimuth/elevation are relative to the surface, not the world origin.
    */
   private setupLights(): void {
-    this.scene.add(new HemisphereLight(0xffffff, 0x444455, 1.1));
-    const key = new DirectionalLight(0xffffff, 1.4);
-    key.position.set(1, 1, 2);
-    this.scene.add(key);
-    const fill = new DirectionalLight(0xffffff, 0.6);
-    fill.position.set(-1, -0.5, -1);
-    this.scene.add(fill);
+    this.scene.add(new HemisphereLight(0xffffff, 0x444455, 0.85));
+
+    this.#rakingLight = new DirectionalLight(0xffffff, 1.6);
+    this.scene.add(this.#rakingLight);
+    this.scene.add(this.#rakingLight.target);
+    this.applyRakingLight();
+  }
+
+  /** Position the raking light from its azimuth/elevation about the model centre. */
+  private applyRakingLight(): void {
+    const az = MathUtils.degToRad(this.#rakingAzimuth);
+    const el = MathUtils.degToRad(this.#rakingElevation);
+    // Direction the light comes FROM, relative to the surface (which faces +Z): azimuth
+    // sweeps in the XY plane, elevation lifts out of it toward the viewer.
+    const dir = new Vector3(
+      Math.cos(el) * Math.cos(az),
+      Math.cos(el) * Math.sin(az),
+      Math.sin(el),
+    );
+    this.#rakingLight.target.position.copy(this.#modelCenter);
+    this.#rakingLight.position.copy(this.#modelCenter).addScaledVector(dir, 100);
+    this.#rakingLight.target.updateMatrixWorld();
+  }
+
+  /**
+   * Aim the raking light. `azimuth` sweeps around the surface normal (degrees, 0–360);
+   * `elevation` is the grazing angle above the surface (degrees, ~5 = very raking,
+   * 90 = straight-on). Low elevations exaggerate relief.
+   */
+  setRakingLight(azimuth: number, elevation: number): void {
+    this.#rakingAzimuth = azimuth;
+    this.#rakingElevation = MathUtils.clamp(elevation, 0, 90);
+    this.applyRakingLight();
+  }
+
+  /** Current raking-light angles (degrees). */
+  getRakingLight(): { azimuth: number; elevation: number } {
+    return { azimuth: this.#rakingAzimuth, elevation: this.#rakingElevation };
+  }
+
+  /** Register a callback run every frame (after controls.update); returns an unsubscribe. */
+  onFrame(callback: () => void): () => void {
+    this.#frameCallbacks.add(callback);
+    return () => this.#frameCallbacks.delete(callback);
   }
 
   /** The currently displayed model root (a loaded glb scene), or null. */
@@ -133,6 +180,7 @@ export class Viewer {
     meshCount: number;
     hasTexturedMaterial: boolean;
     cameraDistance: number;
+    boundingDiagonal: number;
   } {
     let meshCount = 0;
     let hasTexturedMaterial = false;
@@ -147,6 +195,14 @@ export class Viewer {
         hasTexturedMaterial = true;
       }
     });
+    // World-space bbox diagonal in scene units (cm). A regression that dropped the node
+    // transform would read quantized units (thousands) instead of the real tens of cm.
+    const boundingDiagonal = this.#currentModel
+      ? new Box3()
+          .setFromObject(this.#currentModel)
+          .getSize(new Vector3())
+          .length()
+      : 0;
     return {
       triangles: this.renderer.info.render.triangles,
       geometries: this.renderer.info.memory.geometries,
@@ -154,6 +210,7 @@ export class Viewer {
       meshCount,
       hasTexturedMaterial,
       cameraDistance: this.camera.position.distanceTo(this.controls.target),
+      boundingDiagonal,
     };
   }
 
@@ -193,6 +250,10 @@ export class Viewer {
     }
     this.scene.add(root);
     this.#currentModel = root;
+    // Track the centre so the raking light aims at the surface (variants register in the
+    // same frame, so this barely moves across a switch).
+    new Box3().setFromObject(root).getCenter(this.#modelCenter);
+    this.applyRakingLight();
     if (frame) {
       this.frameObject(root);
     }
@@ -243,6 +304,9 @@ export class Viewer {
     }
     this.#frame = requestAnimationFrame(this.#renderLoop);
     this.controls.update();
+    for (const callback of this.#frameCallbacks) {
+      callback();
+    }
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -253,6 +317,7 @@ export class Viewer {
     }
     this.#disposed = true;
     cancelAnimationFrame(this.#frame);
+    this.#frameCallbacks.clear();
     this.#resizeObserver.disconnect();
     // Remove (do not dispose) the current model — the caller's cache owns model
     // lifecycle and disposes every loaded variant on teardown.
