@@ -239,6 +239,57 @@ input[type="range"]:focus-visible { outline: 2px solid var(--dri-accent); outlin
 .panel-reset:hover { color: var(--dri-ink); border-color: var(--dri-accent); }
 .panel-reset:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 2px; }
 
+/* --- Light panel: shaded-sphere azimuth dial + elevation slider ----------- */
+.light-panel { display: flex; gap: 14px; align-items: stretch; }
+.light-dial {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+}
+.light-dial:active { cursor: grabbing; }
+.light-dial:focus-visible { outline: 2px solid var(--dri-accent); outline-offset: 3px; }
+.light-dial-face { display: block; width: 108px; height: 108px; }
+.light-dial-puck {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px; /* centre on its (left,top) */
+  border-radius: 50%;
+  background: var(--dri-ink);
+  border: 2px solid #1b1512;
+  box-shadow: 0 0 6px rgba(246, 230, 200, 0.8);
+  pointer-events: none;
+}
+/* Vertical elevation slider beside the ball (native range, rotated). */
+.light-el { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.light-el .el-track {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 92px;
+}
+.light-el input[type="range"] {
+  writing-mode: vertical-lr;
+  direction: rtl; /* low elevation at the bottom */
+  width: 3px;
+  height: 92px;
+}
+.light-el .el-cap { font-size: 10px; color: var(--dri-dim); }
+.light-readout {
+  margin-top: 10px;
+  display: flex;
+  gap: 14px;
+  font-family: var(--dri-mono);
+  font-size: 11px;
+  color: var(--dri-ink);
+}
+.light-readout .dim { color: var(--dri-dim); }
+
 /* --- Floating measurement label ------------------------------------------- */
 .measure-label {
   position: absolute;

@@ -185,7 +185,7 @@ closes the others), `aria-expanded`/`aria-haspopup`.
 ### Tasks
 - [x] Task 9.1: Reusable popover-button primitive (focus mgmt, Esc/click-outside
       dismiss, mutual exclusion, aria-expanded/haspopup) + unit tests.
-- [ ] Task 9.2: Shaded-sphere azimuth dial (canvas or SVG in the shadow DOM):
+- [x] Task 9.2: Shaded-sphere azimuth dial (canvas or SVG in the shadow DOM):
       drag → azimuth; puck radius = cos(elevation); `role=slider` keyboard model;
       unit test for angle↔azimuth and elevation↔radius mapping.
 - [ ] Task 9.3: Elevation slider + assemble the Light panel behind the ☀ button;
