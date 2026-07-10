@@ -1,8 +1,17 @@
-// The built-in control cluster: band selector, raking-light sliders, measure toggle.
+// The built-in control cluster: band selector, tool row (pan/measure/clear), and
+// popover panels (Light, and — Phase 10 — Adjust).
 //
 // Shown by default (ui !== "none"); a host that wants its own chrome sets ui="none" and
 // drives the element via attributes/methods/events instead. The panel is decoupled from
-// the element behind ControlsHost so it stays simple and unit-testable.
+// the element behind ControlsHost so it stays simple and unit-testable. The raking-light
+// controls live in a popover behind a ☀ button (the "light ball", Phase 9): a
+// shaded-sphere azimuth dial + a vertical elevation slider.
+
+import { LightDial } from './light-dial';
+import { PopoverButton, PopoverGroup } from './popover';
+
+/** Raking-light default when the Light panel is reset (matches Viewer's initial rig). */
+const RAKING_DEFAULT = { azimuth: 45, elevation: 22 };
 
 /** What the controls need from their host (the <dri-viewer> element). */
 export interface ControlsHost {
@@ -20,6 +29,8 @@ export interface ControlsHost {
   clearMeasurement(): void;
   /** Toggle pan mode (left-drag pans instead of orbiting). */
   setPanMode(on: boolean): void;
+  /** Reframe the camera on the current model (reset view). */
+  resetView(): void;
 }
 
 export class Controls {
@@ -29,6 +40,12 @@ export class Controls {
   #panButton!: HTMLButtonElement;
   #measureButton!: HTMLButtonElement;
   #clearButton!: HTMLButtonElement;
+  #popovers = new PopoverGroup();
+  #light!: PopoverButton;
+  #dial!: LightDial;
+  #elInput!: HTMLInputElement;
+  #azReadout!: HTMLSpanElement;
+  #elReadout!: HTMLSpanElement;
 
   constructor(mount: ParentNode, host: ControlsHost) {
     this.#host = host;
@@ -36,7 +53,7 @@ export class Controls {
     this.#root.className = 'ui';
     this.#root.setAttribute('part', 'controls');
 
-    this.#root.append(this.buildBands(), this.buildRaking(), this.buildToolRow());
+    this.#root.append(this.buildBands(), this.buildToolRow());
 
     mount.append(this.#root);
   }
@@ -67,63 +84,6 @@ export class Controls {
     }
     group.append(bands);
     return group;
-  }
-
-  private buildRaking(): HTMLDivElement {
-    const group = this.group('Raking light');
-    group.append(
-      this.slider('Az', 0, 360, Math.round(this.#host.raking.azimuth), '°', (az) =>
-        this.#host.setRakingLight(az, this.#currentElevation()),
-      ),
-      this.slider('El', 0, 90, Math.round(this.#host.raking.elevation), '°', (el) =>
-        this.#host.setRakingLight(this.#currentAzimuth(), el),
-      ),
-    );
-    return group;
-  }
-
-  #azInput!: HTMLInputElement;
-  #elInput!: HTMLInputElement;
-
-  private slider(
-    name: string,
-    min: number,
-    max: number,
-    value: number,
-    unit: string,
-    onInput: (value: number) => void,
-  ): HTMLDivElement {
-    const row = document.createElement('div');
-    row.className = 'slider';
-    const tag = document.createElement('span');
-    tag.textContent = name;
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.min = String(min);
-    input.max = String(max);
-    input.value = String(value);
-    input.setAttribute('aria-label', `${name === 'Az' ? 'Azimuth' : 'Elevation'} (degrees)`);
-    const output = document.createElement('output');
-    output.textContent = `${value}${unit}`;
-    input.addEventListener('input', () => {
-      const v = Number(input.value);
-      output.textContent = `${v}${unit}`;
-      onInput(v);
-    });
-    if (name === 'Az') {
-      this.#azInput = input;
-    } else {
-      this.#elInput = input;
-    }
-    row.append(tag, input, output);
-    return row;
-  }
-
-  #currentAzimuth(): number {
-    return Number(this.#azInput.value);
-  }
-  #currentElevation(): number {
-    return Number(this.#elInput.value);
   }
 
   private buildToolRow(): HTMLDivElement {
@@ -160,8 +120,119 @@ export class Controls {
     this.#clearButton.hidden = true;
     this.#clearButton.addEventListener('click', () => this.#host.clearMeasurement());
 
-    row.append(this.#panButton, this.#measureButton, this.#clearButton);
+    // Reset-view (Task 9.4): reframe the camera on the current model.
+    const resetView = document.createElement('button');
+    resetView.type = 'button';
+    resetView.className = 'tool reset-view';
+    resetView.textContent = '⤢';
+    resetView.setAttribute('aria-label', 'Reset view');
+    resetView.title = 'Reset view';
+    resetView.addEventListener('click', () => this.#host.resetView());
+
+    row.append(
+      this.#panButton,
+      this.#measureButton,
+      this.#clearButton,
+      this.buildLightPopover(),
+      resetView,
+    );
     return row;
+  }
+
+  /** The ☀ Light popover: the shaded-sphere azimuth dial + a vertical elevation slider. */
+  private buildLightPopover(): HTMLDivElement {
+    this.#light = new PopoverButton({
+      icon: '☀',
+      label: 'Raking light',
+      group: this.#popovers,
+      buttonClass: 'light',
+    });
+
+    const head = document.createElement('div');
+    head.className = 'panel-head';
+    const title = document.createElement('span');
+    title.className = 'panel-title';
+    title.textContent = 'Raking light';
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'panel-reset';
+    reset.textContent = 'Reset';
+    reset.addEventListener('click', () => this.#resetLight());
+    head.append(title, reset);
+
+    const body = document.createElement('div');
+    body.className = 'light-panel';
+
+    this.#dial = new LightDial({
+      azimuth: this.#host.raking.azimuth,
+      elevation: this.#host.raking.elevation,
+      onInput: (az, el) => this.#applyRaking(az, el),
+      onReset: () => this.#resetLight(),
+    });
+
+    // Vertical elevation slider (grazing at the bottom, straight-on at the top).
+    const elCol = document.createElement('div');
+    elCol.className = 'light-el';
+    const capTop = document.createElement('span');
+    capTop.className = 'el-cap';
+    capTop.textContent = '90°';
+    const track = document.createElement('div');
+    track.className = 'el-track';
+    this.#elInput = document.createElement('input');
+    this.#elInput.type = 'range';
+    this.#elInput.min = '0';
+    this.#elInput.max = '90';
+    this.#elInput.value = String(Math.round(this.#host.raking.elevation));
+    this.#elInput.setAttribute('aria-label', 'Light elevation (degrees)');
+    this.#elInput.addEventListener('input', () =>
+      this.#dial.setElevation(Number(this.#elInput.value), true),
+    );
+    track.append(this.#elInput);
+    const capBot = document.createElement('span');
+    capBot.className = 'el-cap';
+    capBot.textContent = '0°';
+    elCol.append(capTop, track, capBot);
+
+    body.append(this.#dial.root, elCol);
+
+    // Numeric az/el readouts.
+    const readout = document.createElement('div');
+    readout.className = 'light-readout';
+    this.#azReadout = document.createElement('span');
+    this.#elReadout = document.createElement('span');
+    this.#updateReadout(this.#host.raking.azimuth, this.#host.raking.elevation);
+    readout.append(this.#labelled('Az', this.#azReadout), this.#labelled('El', this.#elReadout));
+
+    this.#light.panel.append(head, body, readout);
+    return this.#light.root;
+  }
+
+  #labelled(name: string, value: HTMLSpanElement): HTMLSpanElement {
+    const wrap = document.createElement('span');
+    const dim = document.createElement('span');
+    dim.className = 'dim';
+    dim.textContent = `${name} `;
+    wrap.append(dim, value);
+    return wrap;
+  }
+
+  /** Push raking angles to the host and refresh the numeric readout (single sink). */
+  #applyRaking(azimuth: number, elevation: number): void {
+    this.#updateReadout(azimuth, elevation);
+    this.#host.setRakingLight(azimuth, elevation);
+  }
+
+  #updateReadout(azimuth: number, elevation: number): void {
+    this.#azReadout.textContent = `${Math.round(azimuth)}°`;
+    this.#elReadout.textContent = `${Math.round(elevation)}°`;
+  }
+
+  /** Return the raking light to its default azimuth/elevation. */
+  #resetLight(): void {
+    this.#dial.setAzimuth(RAKING_DEFAULT.azimuth);
+    this.#dial.setElevation(RAKING_DEFAULT.elevation);
+    this.#elInput.value = String(RAKING_DEFAULT.elevation);
+    this.#applyRaking(RAKING_DEFAULT.azimuth, RAKING_DEFAULT.elevation);
   }
 
   /** Show/hide the Clear button to match whether a measurement is drawn. */
@@ -187,6 +258,8 @@ export class Controls {
   }
 
   dispose(): void {
+    this.#light?.dispose();
+    this.#dial?.dispose();
     this.#root.remove();
   }
 }

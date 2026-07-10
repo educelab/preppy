@@ -61,7 +61,10 @@ Additional JS-only members:
 - `activeVariant: string` — the variant currently shown (read-only).
 - `setMeasuring(on: boolean)` / `measuring: boolean` — toggle two-point measure mode.
 - `setRakingLight(azimuth, elevation)` / `getRakingLight()` — aim the raking key light
-  (degrees; low elevation = grazing/relief-revealing).
+  (degrees; low elevation = grazing/relief-revealing). The built-in UI exposes this as a
+  ☀ "light ball" popover: drag the shaded sphere to set azimuth, the vertical slider sets
+  elevation (sliding the puck radially), Reset returns to az 45° / el 22°.
+- `resetView()` — reframe the camera on the current model (the built-in ⤢ button).
 - `maxCachedVariants: number` — cap resident variant models (0 = keep all, the default;
   a handful of 8K variants coexist comfortably).
 - `getRenderStats()` / `getCameraState()` — diagnostics.
@@ -74,6 +77,7 @@ All bubble and cross the shadow boundary (`composed`).
 | ---------------- | -------- | ---------- |
 | `variant-change` | `{ id }` | A variant becomes active (initial load or switch). |
 | `measure`        | `{ distance, unit, points }` | A two-point measurement completes (`distance` in manifest units, e.g. cm). |
+| `raking-change`  | `{ azimuth, elevation }` | The raking light is re-aimed (degrees). Lets `ui="none"` hosts track light state. |
 | `error`          | `{ error }` | WebGL init or a load fails (the element stays mounted). |
 
 ## Manifest

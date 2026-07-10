@@ -84,8 +84,9 @@ test('raking-light slider changes the light elevation', async ({ page }) => {
     (n as unknown as { getRakingLight(): { elevation: number } }).getRakingLight(),
   )) as { elevation: number };
 
-  // Drive the elevation slider to its minimum (grazing).
-  const elevation = page.locator('dri-viewer .slider').nth(1).locator('input[type="range"]');
+  // Open the Light popover and drive its elevation slider to grazing.
+  await page.locator('dri-viewer .popover-trigger.light').click();
+  const elevation = page.locator('dri-viewer .light-el input[type="range"]');
   await elevation.fill('5');
   await elevation.dispatchEvent('input');
 

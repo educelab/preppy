@@ -29,6 +29,15 @@ export type VariantChangeEvent = CustomEvent<VariantChangeDetail>;
 /** Typed `measure` CustomEvent, dispatched when a two-point measurement completes. */
 export type MeasureEvent = CustomEvent<MeasureResult>;
 
+/** Detail payload of the `raking-change` event (current raking-light angles, degrees). */
+export interface RakingChangeDetail {
+  azimuth: number;
+  elevation: number;
+}
+
+/** Typed `raking-change` CustomEvent (emitted whenever the raking light is re-aimed). */
+export type RakingChangeEvent = CustomEvent<RakingChangeDetail>;
+
 const TAG_NAME = 'dri-viewer';
 
 let sheet: CSSStyleSheet | null = null;
@@ -450,12 +459,27 @@ export class DriViewer extends HTMLElement {
    * `elevation` (deg, grazing) exaggerates relief. No-op if not rendering.
    */
   setRakingLight(azimuth: number, elevation: number): void {
-    this.#viewer?.setRakingLight(azimuth, elevation);
+    if (!this.#viewer) {
+      return;
+    }
+    this.#viewer.setRakingLight(azimuth, elevation);
+    // Emit the clamped angles the viewer settled on, so ui="none" hosts stay in sync.
+    const raking = this.#viewer.getRakingLight();
+    this.emitRakingChange(raking.azimuth, raking.elevation);
   }
 
   /** Current raking-light angles (degrees), or null if not rendering. */
   getRakingLight(): { azimuth: number; elevation: number } | null {
     return this.#viewer?.getRakingLight() ?? null;
+  }
+
+  /** Reframe the camera on the current model (reset view); no-op if not rendering. */
+  resetView(): void {
+    const viewer = this.#viewer;
+    const model = viewer?.currentModel;
+    if (viewer && model) {
+      viewer.frameObject(model);
+    }
   }
 
   #onMeasureComplete(result: MeasureResult): void {
@@ -492,6 +516,7 @@ export class DriViewer extends HTMLElement {
       setMeasuring: (on) => this.setMeasuring(on),
       clearMeasurement: () => this.clearMeasurement(),
       setPanMode: (on) => this.setPanMode(on),
+      resetView: () => this.resetView(),
     });
     if (this.#activeVariantId) {
       this.#controls.setActiveVariant(this.#activeVariantId);
@@ -532,6 +557,17 @@ export class DriViewer extends HTMLElement {
       }),
     );
   }
+
+  /** Dispatch `raking-change` with the current raking-light angles (composed/bubbling). */
+  protected emitRakingChange(azimuth: number, elevation: number): void {
+    this.dispatchEvent(
+      new CustomEvent<RakingChangeDetail>('raking-change', {
+        detail: { azimuth, elevation },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
 }
 
 /** Register the element (idempotent). Called for its side effect from index.ts. */
@@ -548,5 +584,6 @@ declare global {
   interface HTMLElementEventMap {
     'variant-change': VariantChangeEvent;
     measure: MeasureEvent;
+    'raking-change': RakingChangeEvent;
   }
 }

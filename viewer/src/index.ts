@@ -13,6 +13,8 @@ export type {
   VariantChangeDetail,
   VariantChangeEvent,
   MeasureEvent,
+  RakingChangeDetail,
+  RakingChangeEvent,
 } from './dri-viewer';
 export type { MeasureResult } from './measure';
 export type { Manifest, Variant } from './manifest';

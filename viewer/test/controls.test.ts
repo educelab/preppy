@@ -20,6 +20,7 @@ function makeHost(overrides: Partial<ControlsHost> = {}): ControlsHost & {
     setMeasuring: (on) => measured.push(on),
     clearMeasurement: () => {},
     setPanMode: () => {},
+    resetView: () => {},
     selected,
     raked,
     measured,
@@ -57,17 +58,56 @@ describe('Controls', () => {
     expect(bands[1]!.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('seeds the raking sliders from the host and reports both angles on input', () => {
+  it('houses the raking controls in a Light popover behind the ☀ button', () => {
+    new Controls(mount, makeHost());
+    const trigger = mount.querySelector<HTMLButtonElement>('.popover-trigger.light')!;
+    expect(trigger).not.toBeNull();
+    expect(trigger.getAttribute('aria-label')).toBe('Raking light');
+    // The panel exists but is hidden until the button is clicked.
+    const panel = mount.querySelector<HTMLDivElement>('.popover-panel')!;
+    expect(panel.hidden).toBe(true);
+    expect(mount.querySelector('.light-dial')).not.toBeNull();
+    trigger.click();
+    expect(panel.hidden).toBe(false);
+  });
+
+  it('seeds the dial + elevation slider from the host; elevation slider reports angles', () => {
     const host = makeHost();
     new Controls(mount, host);
-    const sliders = mount.querySelectorAll<HTMLInputElement>('input[type="range"]');
-    expect(sliders).toHaveLength(2);
-    expect(sliders[0]!.value).toBe('45'); // azimuth
-    expect(sliders[1]!.value).toBe('22'); // elevation
+    const dial = mount.querySelector<HTMLDivElement>('.light-dial')!;
+    expect(dial.getAttribute('aria-valuenow')).toBe('45'); // azimuth
+    const el = mount.querySelector<HTMLInputElement>('.light-el input[type="range"]')!;
+    expect(el.value).toBe('22'); // elevation
 
-    sliders[1]!.value = '5';
-    sliders[1]!.dispatchEvent(new Event('input'));
+    el.value = '5';
+    el.dispatchEvent(new Event('input'));
     expect(host.raked.at(-1)).toEqual([45, 5]); // current azimuth + new elevation
+  });
+
+  it('dragging-equivalent dial keyboard input reports azimuth with current elevation', () => {
+    const host = makeHost();
+    new Controls(mount, host);
+    const dial = mount.querySelector<HTMLDivElement>('.light-dial')!;
+    dial.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    expect(host.raked.at(-1)).toEqual([50, 22]); // az +5, elevation unchanged
+  });
+
+  it('Reset returns the raking light to the default azimuth/elevation', () => {
+    const host = makeHost({ raking: { azimuth: 200, elevation: 80 } });
+    new Controls(mount, host);
+    const reset = mount.querySelector<HTMLButtonElement>('.panel-reset')!;
+    reset.click();
+    expect(host.raked.at(-1)).toEqual([45, 22]);
+    const el = mount.querySelector<HTMLInputElement>('.light-el input[type="range"]')!;
+    expect(el.value).toBe('22');
+  });
+
+  it('reset-view button asks the host to reframe', () => {
+    const framed: number[] = [];
+    const host = makeHost({ resetView: () => framed.push(1) });
+    new Controls(mount, host);
+    mount.querySelector<HTMLButtonElement>('.reset-view')!.click();
+    expect(framed).toEqual([1]);
   });
 
   it('toggles measure mode via the host on click', () => {
