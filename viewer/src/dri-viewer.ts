@@ -227,7 +227,9 @@ export class DriViewer extends HTMLElement {
     } else if (name === 'variant') {
       // Switch to the requested variant, preserving the camera. Skip when it already
       // matches what's shown (e.g. our own reflected write of the resolved default).
-      if (newValue && newValue !== this.#activeVariantId) {
+      // Before a manifest has loaded (e.g. `manifest` + `variant` set in the same tick),
+      // defer: the in-flight/upcoming reload() reads `this.variant` and shows it, framed.
+      if (this.#manifest && newValue && newValue !== this.#activeVariantId) {
         void this.switchTo(newValue);
       }
     } else if (name === 'ui') {
@@ -250,8 +252,12 @@ export class DriViewer extends HTMLElement {
       return;
     }
     const token = ++this.#loadToken;
-    // A (re)load implies a (possibly) new manifest — the old variants no longer apply.
+    // A (re)load implies a (possibly) new manifest — the old variants no longer apply,
+    // and the manifest is not valid again until the new one resolves. Clearing it here
+    // lets a `variant` attribute set in the same tick defer to this load (below) instead
+    // of racing an empty manifest.
     this.#clearCache();
+    this.#manifest = null;
     try {
       if (this.#inlineManifest) {
         this.#manifest = this.#inlineManifest;
