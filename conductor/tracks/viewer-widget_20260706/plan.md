@@ -117,7 +117,7 @@ into high-frequency normal jitter → jagged shading under raking light.
       gltfpack a normal-bearing mesh, or a gltf-transform normal pass. Reverses the
       current "normals computed in the viewer" choice — update `geometry.py` docstring,
       CLAUDE.md, and the viewer's `loadModel` (skip compute when normals present).
-- [ ] Task 7.2: Regenerate the PHerc1428Cr04 fixture (all variants) → copy to
+- [~] Task 7.2: Regenerate the PHerc1428Cr04 fixture (all variants) → copy to
       `viewer/public/fixtures/`.
 ### Verification
 - [ ] Delivered glb has a NORMAL attribute; viewer shows smooth shading under a
