@@ -7,9 +7,9 @@
   "updated": "2026-07-10T00:00:00Z",
   "depends_on": ["toolchain-spike_20260706", "delivery-pipeline_20260706"],
   "current_phase": 7,
-  "current_task": "7.1",
+  "current_task": "7-verification",
   "phases": { "total": 10, "completed": 6 },
-  "tasks": { "total": 24, "completed": 18 },
+  "tasks": { "total": 25, "completed": 19 },
   "commits": [
     "e8f697b: viewer: scaffold TS + Vite web-component bundle",
     "0609c16: viewer: <dri-viewer> custom-element skeleton + test harness",
