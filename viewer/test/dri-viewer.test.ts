@@ -63,4 +63,40 @@ describe('<dri-viewer> element skeleton', () => {
     expect(bubbled).toBe(true);
     el.remove();
   });
+
+  it('image adjust defaults to identity and is a no-op without an active variant', () => {
+    const el = document.createElement('dri-viewer');
+    document.body.append(el); // WebGL init fails under happy-dom → no variant is shown
+    let events = 0;
+    el.addEventListener('image-adjust-change', () => (events += 1));
+    expect(el.getImageAdjust()).toEqual({ brightness: 0, contrast: 0 });
+    el.setImageAdjust({ brightness: 40, contrast: -20 });
+    expect(el.getImageAdjust()).toEqual({ brightness: 0, contrast: 0 }); // no variant → ignored
+    expect(events).toBe(0);
+    el.remove();
+  });
+
+  it('emits a composed, bubbling image-adjust-change carrying id + values', () => {
+    class Probe extends DriViewer {
+      fire(id: string, brightness: number, contrast: number): void {
+        (
+          this as unknown as {
+            emitImageAdjustChange(id: string, a: { brightness: number; contrast: number }): void;
+          }
+        ).emitImageAdjustChange(id, { brightness, contrast });
+      }
+    }
+    if (!customElements.get('dri-viewer-adjust-probe')) {
+      customElements.define('dri-viewer-adjust-probe', Probe);
+    }
+    const el = document.createElement('dri-viewer-adjust-probe') as Probe;
+    document.body.append(el);
+    let detail: { id: string; brightness: number; contrast: number } | null = null;
+    document.body.addEventListener('image-adjust-change', (e) => {
+      detail = (e as CustomEvent).detail;
+    });
+    el.fire('pgs', 30, -15);
+    expect(detail).toEqual({ id: 'pgs', brightness: 30, contrast: -15 });
+    el.remove();
+  });
 });

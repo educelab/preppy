@@ -222,7 +222,7 @@ popover primitive. **Design confirmed with the user:**
 - [x] Task 10.1: Per-material albedo brightness/contrast shader (`onBeforeCompile`,
       display-space, identity at 0) applied to base mesh material(s) only; unit test
       the formula (identity at 0, monotonicity).
-- [ ] Task 10.2: Per-variant in-memory state keyed by variant id — reapply on
+- [x] Task 10.2: Per-variant in-memory state keyed by variant id — reapply on
       variant switch, reset on new manifest; `setImageAdjust`/`getImageAdjust` +
       `image-adjust-change`; `ui="none"` support.
 - [ ] Task 10.3: Adjust panel behind the ◑ button (brightness + contrast sliders,

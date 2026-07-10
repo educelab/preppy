@@ -15,7 +15,10 @@ export type {
   MeasureEvent,
   RakingChangeDetail,
   RakingChangeEvent,
+  ImageAdjustChangeDetail,
+  ImageAdjustChangeEvent,
 } from './dri-viewer';
+export type { ImageAdjust } from './image-adjust';
 export type { MeasureResult } from './measure';
 export type { Manifest, Variant } from './manifest';
 

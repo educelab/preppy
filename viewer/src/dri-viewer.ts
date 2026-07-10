@@ -10,6 +10,13 @@ import { CSS_TEXT } from './styles';
 import { Controls } from './controls';
 import { MeasureTool, type MeasureResult } from './measure';
 import {
+  installAdjustShader,
+  IDENTITY_ADJUST,
+  type ImageAdjust,
+  type AdjustHandle,
+} from './image-adjust';
+import { Mesh, type Material } from 'three';
+import {
   type Manifest,
   type Variant,
   fetchManifest,
@@ -37,6 +44,19 @@ export interface RakingChangeDetail {
 
 /** Typed `raking-change` CustomEvent (emitted whenever the raking light is re-aimed). */
 export type RakingChangeEvent = CustomEvent<RakingChangeDetail>;
+
+/** Detail payload of the `image-adjust-change` event (current variant's adjust). */
+export interface ImageAdjustChangeDetail {
+  /** The variant `id` the adjustment applies to. */
+  id: string;
+  /** Brightness in slider units (−100…100; 0 = identity). */
+  brightness: number;
+  /** Contrast in slider units (−100…100; 0 = identity). */
+  contrast: number;
+}
+
+/** Typed `image-adjust-change` CustomEvent (per-variant brightness/contrast changed). */
+export type ImageAdjustChangeEvent = CustomEvent<ImageAdjustChangeDetail>;
 
 const TAG_NAME = 'dri-viewer';
 
@@ -92,6 +112,15 @@ export class DriViewer extends HTMLElement {
   readonly #cache = new Map<string, Object3D>();
   /** Cache cap; 0 (default) keeps every variant resident. See `maxCachedVariants`. */
   #maxCached = 0;
+
+  /**
+   * Per-variant brightness/contrast, keyed by variant `id` (in-memory, viewer-only).
+   * Survives LRU eviction (re-applied when the model reloads) but is cleared on a new
+   * manifest/object. Absent ⇒ identity (0/0).
+   */
+  readonly #imageAdjust = new Map<string, ImageAdjust>();
+  /** Live shader handles per resident variant model; dropped when the model is evicted. */
+  readonly #adjustHandles = new Map<string, AdjustHandle[]>();
 
   /** Built-in control cluster (null when ui="none" or before a manifest loads). */
   #controls: Controls | null = null;
@@ -352,8 +381,35 @@ export class DriViewer extends HTMLElement {
     const url = resolveVariantUrl(variant, this.#baseUrl);
     const model = await this.#viewer!.loadModel(url);
     this.#cache.set(variant.id, model);
+    this.#installImageAdjust(variant.id, model);
     this.#evictIfNeeded(variant.id);
     return model;
+  }
+
+  /**
+   * Patch the base mesh material(s) with the brightness/contrast shader and apply this
+   * variant's stored adjust (identity if none). Markers/lines are added elsewhere (the
+   * MeasureTool's own group), so only the model's albedo is touched.
+   */
+  #installImageAdjust(id: string, model: Object3D): void {
+    const handles: AdjustHandle[] = [];
+    model.traverse((o) => {
+      const mesh = o as Mesh;
+      if (!mesh.isMesh) {
+        return;
+      }
+      const mats: Material[] = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mat of mats) {
+        if (mat) {
+          handles.push(installAdjustShader(mat));
+        }
+      }
+    });
+    this.#adjustHandles.set(id, handles);
+    const adjust = this.#imageAdjust.get(id) ?? IDENTITY_ADJUST;
+    for (const handle of handles) {
+      handle.set(adjust);
+    }
   }
 
   /** Preload the remaining variants into cache after the default is shown (idle-ish). */
@@ -394,16 +450,22 @@ export class DriViewer extends HTMLElement {
       }
       const model = this.#cache.get(id)!;
       this.#cache.delete(id);
+      // Drop the model's shader handles (recreated on reload); KEEP its #imageAdjust so
+      // the correction is restored if the variant is loaded again (only a new manifest
+      // clears the stored state).
+      this.#adjustHandles.delete(id);
       this.#viewer?.disposeModel(model);
     }
   }
 
-  /** Dispose and drop every cached model. */
+  /** Dispose and drop every cached model (and, for a new manifest, its adjust state). */
   #clearCache(): void {
     for (const model of this.#cache.values()) {
       this.#viewer?.disposeModel(model);
     }
     this.#cache.clear();
+    this.#adjustHandles.clear();
+    this.#imageAdjust.clear();
   }
 
   // --- Measurement & lighting ----------------------------------------------
@@ -480,6 +542,37 @@ export class DriViewer extends HTMLElement {
     if (viewer && model) {
       viewer.frameObject(model);
     }
+  }
+
+  /**
+   * The active variant's brightness/contrast (slider units, −100…100; 0/0 = identity).
+   * Returns identity when nothing is shown. See {@link setImageAdjust}.
+   */
+  getImageAdjust(): ImageAdjust {
+    return { ...(this.#imageAdjust.get(this.#activeVariantId) ?? IDENTITY_ADJUST) };
+  }
+
+  /**
+   * Set the active variant's brightness/contrast (partial merge; slider units clamped to
+   * −100…100). Per-variant and in-memory — kept when toggling variants, cleared on a new
+   * manifest. Emits `image-adjust-change`. No-op when no variant is shown.
+   */
+  setImageAdjust(adjust: Partial<ImageAdjust>): void {
+    const id = this.#activeVariantId;
+    if (!id) {
+      return;
+    }
+    const current = this.#imageAdjust.get(id) ?? IDENTITY_ADJUST;
+    const clamp = (v: number) => Math.min(100, Math.max(-100, v));
+    const next: ImageAdjust = {
+      brightness: clamp(adjust.brightness ?? current.brightness),
+      contrast: clamp(adjust.contrast ?? current.contrast),
+    };
+    this.#imageAdjust.set(id, next);
+    for (const handle of this.#adjustHandles.get(id) ?? []) {
+      handle.set(next);
+    }
+    this.emitImageAdjustChange(id, next);
   }
 
   #onMeasureComplete(result: MeasureResult): void {
@@ -568,6 +661,17 @@ export class DriViewer extends HTMLElement {
       }),
     );
   }
+
+  /** Dispatch `image-adjust-change` for the given variant (composed/bubbling). */
+  protected emitImageAdjustChange(id: string, adjust: ImageAdjust): void {
+    this.dispatchEvent(
+      new CustomEvent<ImageAdjustChangeDetail>('image-adjust-change', {
+        detail: { id, brightness: adjust.brightness, contrast: adjust.contrast },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
 }
 
 /** Register the element (idempotent). Called for its side effect from index.ts. */
@@ -585,5 +689,6 @@ declare global {
     'variant-change': VariantChangeEvent;
     measure: MeasureEvent;
     'raking-change': RakingChangeEvent;
+    'image-adjust-change': ImageAdjustChangeEvent;
   }
 }
