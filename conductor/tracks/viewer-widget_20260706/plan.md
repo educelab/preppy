@@ -126,7 +126,7 @@ into high-frequency normal jitter → jagged shading under raking light.
       getRenderStats().hasNormals=true; ~+1 MB/variant; 9/9 e2e + 97/97 pipeline green;
       user-confirmed smooth under grazing light in the running viewer (2026-07-10).
 
-## Phase 8: PGS nodataFill orange-fringe fix (feedback #1) — pipeline
+## Phase 8: PGS nodataFill orange-fringe fix (feedback #1) — pipeline — COMPLETE
 Finding (confirmed w/ repro): PGS = `2_center.jpg`, a 32768² grayscale atlas with
 `nodataFill: #ff7f25` covering ~2/3 of the image. `normalize()` resizes to 8192
 **before** `fill_nodata()`, so the 4× downscale blends orange into UV-island edges;
@@ -147,11 +147,18 @@ here.)
       resize RGBA (alpha-weighted so orange contributes nothing), then fill the
       still-transparent regions (nearest-valid, existing EDT) instead of matching a
       color. Keep it off the gigapixel EDT path (the old full-res dilate hung).
-- [ ] Task 8.2: Regenerate PGS variant → copy to fixtures.
+- [x] Task 8.2: Regenerate PGS variant → copy to fixtures. Trimmed pgs-only config
+      regen (hash inputs unchanged → same name `PHerc1428Cr04_pgs.890bf49a.glb`,
+      dropped over the fixture; manifest untouched).
 ### Verification
-- [ ] Residual orange-tinted fraction ≈ 0 at fuzz 0.10 on the normalized image;
-      no orange fringes on the surface in a headless PGS screenshot. Add a unit test
-      on the mask-aware path with a synthetic tiny atlas.
+- [x] Residual orange-tinted fraction ≈ 0 at fuzz 0.10 on the normalized image;
+      no orange fringes on the surface. Verified on the real 32k PGS atlas: orange-
+      tinted fraction **0.0000%** at fuzz 0.10 (was ~15% mid-fix with a divide path,
+      ~30% before Phase 8); mask covers 73% (nodata) leaving 0% orange among opaque
+      chart pixels; background back-fill is neutral gray (unsampled by geometry).
+      Added 3 unit tests incl. an end-to-end synthetic-atlas normalize and a
+      partial-rim speckle regression test. Full suite 101/101 green. Refinement found
+      during 8.2 verification (rim-speckle from divide amplification) fixed in 8cdbdf1.
 
 ## Phase 9: Light-direction widget — "light ball" (feedback #3) — viewer
 Replace the two Az/El sliders with a 2D disc: drag a puck; angle = azimuth,

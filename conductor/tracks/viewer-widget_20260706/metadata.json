@@ -6,10 +6,10 @@
   "created": "2026-07-06T18:56:11Z",
   "updated": "2026-07-10T00:00:00Z",
   "depends_on": ["toolchain-spike_20260706", "delivery-pipeline_20260706"],
-  "current_phase": 8,
-  "current_task": "8.1",
-  "phases": { "total": 10, "completed": 7 },
-  "tasks": { "total": 25, "completed": 19 },
+  "current_phase": 9,
+  "current_task": "9.1",
+  "phases": { "total": 10, "completed": 8 },
+  "tasks": { "total": 25, "completed": 21 },
   "commits": [
     "e8f697b: viewer: scaffold TS + Vite web-component bundle",
     "0609c16: viewer: <dri-viewer> custom-element skeleton + test harness",
@@ -22,6 +22,8 @@
     "7cd41ce: viewer: persistent measurement + zoom-constant marker size (Phase 5)",
     "deb9925: viewer: pan as a first-class tool (Phase 6, feedback #2)",
     "c6473f3: viewer: bake smooth vertex normals in the pipeline (Phase 7, feedback #4)",
-    "1957ca9: viewer: Phase 7 verification — assert delivered glb ships baked normals"
+    "1957ca9: viewer: Phase 7 verification — assert delivered glb ships baked normals",
+    "6798591: viewer: nodata-aware texture downscale so PGS orange never fringes (Phase 8, feedback #1)",
+    "8cdbdf1: texture: composite masked resize over opaque-only back-fill (no rim speckle)"
   ]
 }
