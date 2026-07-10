@@ -130,8 +130,15 @@ Finding (confirmed w/ repro): PGS = `2_center.jpg`, a 32768² grayscale atlas wi
 **before** `fill_nodata()`, so the 4× downscale blends orange into UV-island edges;
 `fill_nodata` (fuzz 0.05) then back-fills the background *from those orange-tinted
 edge pixels*. Repro: 0% pure orange remains but ~30% is orange-tinted; bright
-orange fringes rim every island → orange specks on the surface. (The grey look
-itself is the source band, not a defect.)
+orange fringes rim every island → orange specks on the surface.
+
+**Not a defect — PGS is meant to be grayscale.** Confirmed with the user: PGS
+(`2_center.jpg`) is a genuinely grayscale band that the upstream MVS pipeline
+re-encoded as 3-channel RGB (32768² sRGB). So the flat/grey appearance is correct
+data, not a pipeline washout — do NOT try to "restore color." Only the orange
+nodataFill fringes (Task 8.1) are the bug. (Optional future nicety: collapse such
+grayscale-as-RGB textures to single-channel before KTX2 to save size — out of scope
+here.)
 ### Tasks
 - [ ] Task 8.1: Make the downscale nodata-aware so orange never blends in: at full
       res build the orange mask (cheap threshold), set masked pixels to alpha 0,
