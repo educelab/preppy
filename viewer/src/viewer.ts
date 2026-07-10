@@ -197,11 +197,13 @@ export class Viewer {
     textures: number;
     meshCount: number;
     hasTexturedMaterial: boolean;
+    hasNormals: boolean;
     cameraDistance: number;
     boundingDiagonal: number;
   } {
     let meshCount = 0;
     let hasTexturedMaterial = false;
+    let hasNormals = false;
     this.#currentModel?.traverse((o) => {
       const mesh = o as Mesh;
       if (!mesh.isMesh) {
@@ -211,6 +213,9 @@ export class Viewer {
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       if (mats.some((m) => m && 'map' in m && (m as { map: unknown }).map)) {
         hasTexturedMaterial = true;
+      }
+      if ((mesh.geometry as BufferGeometry).getAttribute('normal')) {
+        hasNormals = true;
       }
     });
     // World-space bbox diagonal in scene units (cm). A regression that dropped the node
@@ -227,6 +232,7 @@ export class Viewer {
       textures: this.renderer.info.memory.textures,
       meshCount,
       hasTexturedMaterial,
+      hasNormals,
       cameraDistance: this.camera.position.distanceTo(this.controls.target),
       boundingDiagonal,
     };
