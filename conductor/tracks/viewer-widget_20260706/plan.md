@@ -160,7 +160,7 @@ here.)
       partial-rim speckle regression test. Full suite 101/101 green. Refinement found
       during 8.2 verification (rim-speckle from divide amplification) fixed in 8cdbdf1.
 
-## Phase 9: Popover primitive + Light panel — "light ball" (feedback #3) — viewer
+## Phase 9: Popover primitive + Light panel — "light ball" (feedback #3) — viewer — COMPLETE
 Move the raking-light controls out of the inline bar into a popover behind a ☀
 "light-mode" icon button. **Interaction model confirmed with the user (2026-07-10
 grill):**
@@ -188,16 +188,19 @@ closes the others), `aria-expanded`/`aria-haspopup`.
 - [x] Task 9.2: Shaded-sphere azimuth dial (canvas or SVG in the shadow DOM):
       drag → azimuth; puck radius = cos(elevation); `role=slider` keyboard model;
       unit test for angle↔azimuth and elevation↔radius mapping.
-- [ ] Task 9.3: Elevation slider + assemble the Light panel behind the ☀ button;
+- [x] Task 9.3: Elevation slider + assemble the Light panel behind the ☀ button;
       remove inline Az/El sliders; Reset button; wire `setRakingLight`/`getRakingLight`
       + emit `raking-change`; keep `ui="none"` hiding it.
-- [ ] Task 9.4: Reset-view button in the tool row → `resetView()` (reframes the
+- [x] Task 9.4: Reset-view button in the tool row → `resetView()` (reframes the
       current model, reusing `Viewer.frameObject`).
 ### Verification
-- [ ] Headless: drag + arrow keys drive `getRakingLight` as expected; elevation
+- [x] Headless: drag + arrow keys drive `getRakingLight` as expected; elevation
       slider moves the puck radially; Reset returns to az 45°/el 22°; reset-view
-      reframes; popover a11y (focus/Esc/mutual-exclusion); `ui="none"` hides both
-      buttons. Unit tests for popover + dial mappings green.
+      reframes; popover a11y (focus/Esc); `ui="none"` hides both buttons. Unit tests
+      for popover + dial mappings green. Verified: typecheck clean, 49 unit
+      (12 controls + 8 popover + 10 dial) + phase1–4,7,9 e2e green (e2e/phase9.spec.ts,
+      6 tests). Mutual-exclusion covered by popover unit tests; the second built-in
+      popover (Adjust) arrives in Phase 10 for a full cross-popover e2e.
 
 ## Phase 10: Image brightness/contrast adjust (feedback, 2026-07-10 grill) — viewer
 Per-variant runtime brightness/contrast corrective for the visible base mesh (some
