@@ -3,16 +3,24 @@ encode them to KTX2/Basis.
 
 - :func:`normalize` — ImageMagick ``magick`` converts CIELab / 16-bit source
   images to 8-bit sRGB PNG and downsizes anything larger than ``max_dim``. When a
-  ``nodata_fill`` color is given it then runs :func:`fill_nodata` on the
-  *downsized* image so the saturated fill does not bleed into chart edges through
-  the mip chain.
-- :func:`fill_nodata` — an in-memory (Pillow + numpy + scipy) nearest-valid-pixel
-  fill: every pixel matching the fill color is replaced by its nearest non-fill
-  neighbour via a Euclidean distance transform, eliminating the fill entirely so
-  nothing bleeds at *any* mip level. This replaces an earlier ImageMagick
-  ``-morphology Dilate`` step that ran at full source resolution before the
-  resize and hung on gigapixel textures (a 32768² source is ~1 Gpx; a diamond-16
-  dilation over it never returns in practice).
+  ``nodata_fill`` color is given the downscale is made *nodata-aware* so the
+  saturated fill never blends into the chart edges: the fill color is masked to
+  alpha 0 at full resolution (a cheap per-pixel threshold, ``-transparent``) and
+  ImageMagick's alpha-weighted (premultiplied) resize then downsizes it, so a
+  masked pixel contributes *nothing* to the resampled edge pixels. The still-
+  transparent background is finally back-filled by :func:`fill_transparent`.
+  Doing the mask before the resize is the whole point — resizing first (the old
+  order) blended orange into UV-island edges, and a color-keyed back-fill then
+  seeded itself from those orange-tinted edges, rimming every island (feedback #1).
+- :func:`fill_transparent` — an in-memory (Pillow + numpy + scipy) nearest-valid-
+  pixel fill keyed on the *alpha* channel: every fully-transparent (masked) pixel
+  is replaced by its nearest opaque neighbour via a Euclidean distance transform,
+  then the alpha channel is dropped. Because *all* masked pixels are replaced by
+  real chart color (not the fill color), nothing bleeds at *any* mip level. It
+  runs on the already-downsized image, keeping the distance transform off the
+  gigapixel path — an earlier full-resolution ImageMagick ``-morphology Dilate``
+  hung on gigapixel textures (a 32768² source is ~1 Gpx; a diamond-16 dilation
+  over it never returns in practice).
 - :func:`encode_ktx2` — ``ktx create`` (KTX-Software >= v5) encodes the PNG to a
   mipmapped KTX2, ETC1S (``basis-lz``) by default or UASTC.
 
@@ -39,13 +47,39 @@ def normalize_cmd(src: Path, dst: Path, max_dim: int = 8192) -> List[str]:
     - ``-resize {max_dim}x{max_dim}>`` shrinks only images larger than the limit
       (the ``>`` flag never upscales).
 
-    The no-data fill is *not* done here — it runs in-memory on the downsized
-    output (:func:`fill_nodata`), so the expensive per-pixel work never touches
-    the full-resolution source.
+    The no-data fill is *not* done here; when a fill color is configured the
+    orchestrator uses :func:`normalize_masked_cmd` instead, which masks the fill
+    before the resize. This plain path is the no-fill case.
     """
     return ['magick', str(src),
             '-resize', f'{max_dim}x{max_dim}>',
             '-colorspace', 'sRGB', '-depth', '8', str(dst)]
+
+
+def normalize_masked_cmd(src: Path, dst: Path, nodata_fill: str, *,
+                         max_dim: int = 8192, fuzz: float = 0.05) -> List[str]:
+    """Build the ``magick`` argv for the nodata-aware normalize (RGBA output).
+
+    Ordering is load-critical: the fill color is converted to 8-bit sRGB and
+    masked to alpha 0 (``-transparent``) *at full resolution*, and only then is
+    the image resized. ImageMagick's resize is alpha-weighted (premultiplied), so
+    a masked pixel contributes nothing to the resampled edge pixels — the fill
+    can never blend into a UV-island edge. Resizing first (see
+    :func:`normalize_cmd`) is exactly the bug this avoids. ``PNG32:`` forces an
+    RGBA output so :func:`fill_transparent` can read the mask back.
+
+    ``-transparent`` is a cheap per-pixel threshold (unlike the distance
+    transform / dilate), so running it on the full-resolution source is fine.
+    ``fuzz`` is a fraction of the color-distance range, passed to ImageMagick as
+    a percentage.
+    """
+    r, g, b = parse_hex_color(nodata_fill)   # validates; IM rejects bare hex
+    color = f'#{r:02x}{g:02x}{b:02x}'
+    return ['magick', str(src),
+            '-colorspace', 'sRGB', '-depth', '8',
+            '-fuzz', f'{fuzz * 100:g}%', '-transparent', color,
+            '-resize', f'{max_dim}x{max_dim}>',
+            f'PNG32:{dst}']
 
 
 def parse_hex_color(color: str) -> Tuple[int, int, int]:
@@ -67,40 +101,39 @@ def parse_hex_color(color: str) -> Tuple[int, int, int]:
         raise ValueError(f'invalid hex color {color!r}; expected #rrggbb or rgb')
 
 
-def fill_nodata(path: PathLike, nodata_fill: str, *, fuzz: float = 0.05) -> Path:
-    """Replace every ``nodata_fill``-colored pixel in ``path`` with its nearest
-    non-fill neighbour, in place; return ``path``.
+def fill_transparent(path: PathLike) -> Path:
+    """Back-fill the fully-transparent pixels of an RGBA ``path`` from their
+    nearest opaque neighbour, drop the alpha channel, and rewrite ``path`` as
+    RGB in place; return ``path``.
 
-    Pixels within ``fuzz`` (a fraction of the full RGB diagonal) of the fill
-    color are treated as no-data and back-filled from the nearest valid chart
-    pixel via :func:`scipy.ndimage.distance_transform_edt`. Because *all* fill is
-    eliminated (not just an N-pixel ring), the fill cannot bleed into chart edges
-    at any mip level. A no-op when nothing matches (or everything matches, which
-    would leave nothing to fill from).
+    :func:`normalize_masked_cmd` leaves the nodata background at alpha 0 (its RGB
+    is meaningless — premultiplied to black by the resize). Every masked pixel is
+    replaced by the nearest opaque chart pixel via
+    :func:`scipy.ndimage.distance_transform_edt`, so *no* fill color survives and
+    nothing bleeds at any mip level. Runs on the already-downsized image, keeping
+    the distance transform off the gigapixel path. A plain RGB PNG (no alpha) is
+    returned unchanged.
     """
     import numpy as np
     from PIL import Image
-    from scipy import ndimage
 
     path = Path(path)
-    arr = np.asarray(Image.open(path).convert('RGB'))
-    fill = np.array(parse_hex_color(nodata_fill), dtype=np.int16)
+    img = Image.open(path)
+    if img.mode != 'RGBA':
+        return path  # no mask to act on (plain no-fill path)
 
-    # Squared Euclidean distance to the fill color; compare against a squared
-    # threshold to avoid the sqrt. Full diagonal is sqrt(3)*255.
-    diff = arr.astype(np.int16) - fill
-    dist2 = np.einsum('...c,...c->...', diff, diff)  # sum of squares per pixel
-    tol = fuzz * (3.0 ** 0.5) * 255.0
-    mask = dist2 <= tol * tol
+    arr = np.asarray(img)
+    rgb, alpha = arr[..., :3], arr[..., 3]
+    mask = alpha == 0  # nodata pixels to fill
 
-    if not mask.any() or mask.all():
-        return path  # nothing to fill, or nothing valid to fill from
+    if mask.any() and not mask.all():
+        from scipy import ndimage
+        # For each masked pixel, index of the nearest opaque (valid) pixel.
+        idx = ndimage.distance_transform_edt(
+            mask, return_distances=False, return_indices=True)
+        rgb = rgb[tuple(idx)]
 
-    # For each no-data pixel (mask True), index of the nearest valid pixel.
-    idx = ndimage.distance_transform_edt(
-        mask, return_distances=False, return_indices=True)
-    filled = arr[tuple(idx)]
-    Image.fromarray(filled, 'RGB').save(path)
+    Image.fromarray(np.ascontiguousarray(rgb), 'RGB').save(path)
     return path
 
 
@@ -158,10 +191,15 @@ def normalize(src: PathLike, dst: Optional[PathLike] = None, *,
               nodata_fill: Optional[str] = None, fuzz: float = 0.05) -> Path:
     """Normalize ``src`` to an 8-bit sRGB PNG and return the output path.
 
-    ImageMagick handles the color-correct decode + resize; when ``nodata_fill``
-    is given, the fill is then eliminated in-memory on the downsized image
-    (:func:`fill_nodata`). ``dst`` defaults to ``<src stem>.png`` in ``tmp_dir``
-    (or beside ``src`` if no ``tmp_dir`` given).
+    ImageMagick handles the color-correct decode + resize. When ``nodata_fill``
+    is given the downscale is made nodata-aware (:func:`normalize_masked_cmd`):
+    the fill is masked to alpha 0 at full resolution and dropped from the resized
+    edge pixels, then :func:`fill_transparent` back-fills the still-transparent
+    background from real chart color. Keeping the decode + colorspace conversion
+    inside ImageMagick means this works for exotic sources (CIELab / 16-bit)
+    regardless of whether a colorspace conversion is actually needed. ``dst``
+    defaults to ``<src stem>.png`` in ``tmp_dir`` (or beside ``src`` if no
+    ``tmp_dir`` given).
     """
     tools.require('magick')
     src = Path(src)
@@ -171,9 +209,12 @@ def normalize(src: PathLike, dst: Optional[PathLike] = None, *,
         dst = out_dir / f'{src.stem}.png'
     dst = Path(dst)
 
-    tools.run(normalize_cmd(src, dst, max_dim=max_dim))
-    if nodata_fill is not None:
-        fill_nodata(dst, nodata_fill, fuzz=fuzz)
+    if nodata_fill is None:
+        tools.run(normalize_cmd(src, dst, max_dim=max_dim))
+    else:
+        tools.run(normalize_masked_cmd(src, dst, nodata_fill,
+                                       max_dim=max_dim, fuzz=fuzz))
+        fill_transparent(dst)
     return dst
 
 

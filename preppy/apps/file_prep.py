@@ -5,8 +5,9 @@ geometry grouping — ADR-0002 amended), run the validated chain:
 
 1. Resolve the variant's texture(s) transitively from its OBJ's ``map_Kd``
    (``obj_helpers.parse_material_textures``) — one or many (multi-chart UV).
-2. Normalize each texture to 8-bit sRGB PNG (dilating over ``nodataFill`` when
-   resolved) and encode it to KTX2 (``texture``).
+2. Normalize each texture to 8-bit sRGB PNG (masking + back-filling the
+   ``nodataFill`` color when resolved, so it never bleeds into chart edges) and
+   encode it to KTX2 (``texture``).
 3. gltfpack the OBJ to decimated, meshopt-compressed geometry (``geometry``).
 4. Embed every KTX2 into the geometry glb **by material name** -> one
    self-contained variant glb (``assemble``).
