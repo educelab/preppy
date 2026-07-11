@@ -268,7 +268,8 @@ def process_object(object_cfg: Mapping, *, data_root: Path, out_dir: Path,
             asset_names.append(thumb_name)
 
     if opts.prune:
-        removed = cache.prune(obj_out_dir, keep=asset_names)
+        removed = cache.prune(obj_out_dir, keep=asset_names,
+                              keep_last=opts.prune_keep)
         if removed:
             log.info('  pruned %d stale asset(s) from %s/', len(removed), prefix)
 
@@ -351,7 +352,13 @@ def _build_parser() -> argparse.ArgumentParser:
                                'the manifest (default: relative, within folder)')
     out_opts.add_argument('--prune', action='store_true',
                           help='After writing, delete hashed asset files in each '
-                               'object folder no longer referenced by its manifest')
+                               'object folder no longer referenced by its manifest '
+                               '(retention window set by --prune-keep)')
+    out_opts.add_argument('--prune-keep', type=int, default=0, metavar='N',
+                          help='With --prune, also retain the newest N previous '
+                               'generations of each variant, so manifests already '
+                               'served during a rollover keep resolving (default: '
+                               '0 = drop all unreferenced). Ordered by mtime.')
     out_opts.add_argument('--thumbnails', default=True,
                           action=argparse.BooleanOptionalAction,
                           help='Emit a <prefix>_thumb.jpg per object (from the '

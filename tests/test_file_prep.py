@@ -69,6 +69,13 @@ def test_ktx2_mode_cli_default_is_etc1s():
     assert action.choices == ['etc1s', 'uastc']
 
 
+def test_prune_keep_cli_parsing():
+    parser = file_prep._build_parser()
+    args = parser.parse_args(['-i', 'x.json', '--prune', '--prune-keep', '3'])
+    assert args.prune is True and args.prune_keep == 3
+    assert parser.parse_args(['-i', 'x.json']).prune_keep == 0  # default
+
+
 def _stub_opts(**over):
     base = dict(max_dim=8192, nodata_fill=None, target_error=0.2, validate=True,
                 deviation_budget=0.05, deviation_budget_frac=None,

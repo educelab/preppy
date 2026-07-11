@@ -23,7 +23,7 @@ this track *enforces/records* them.
       `#preloadOthers` eagerly loads every variant — tuned to the ~4-variant test
       object. Decide whether the default should stay unbounded or cap/opt-out
       preload for many-variant objects, and document the chosen policy.
-- [ ] Task 1.4: Cache-busting retention policy (keep-last-N via `--prune`) + host
+- [x] Task 1.4: Cache-busting retention policy (keep-last-N via `--prune`) + host
       `Cache-Control` example (`.htaccess`: revalidate manifest, `immutable`
       hashed assets) once the target host is known.
 - [ ] Task 1.5: Accessibility basics on the widget (keyboard, focus, labels).

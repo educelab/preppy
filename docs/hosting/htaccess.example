@@ -1,0 +1,38 @@
+# DRI Voyager — example Apache cache policy for a served catalog.
+#
+# Reference mapping only; the concrete target host is TBD, so tune paths/CDN
+# rules to your deployment. The two tiers below are the invariant that makes
+# cache-busting safe:
+#
+#   * hashed assets (…​.<8 hex>.glb / .ktx2)  -> immutable, cache forever
+#   * manifest.json / index.json             -> always revalidate
+#
+# A viewer re-fetches the manifest (cheap, revalidated), sees the new hashed
+# URIs, and pulls the new immutable assets. Old hashed assets kept by
+# `voyager-preppy --prune --prune-keep N` still resolve for clients holding a
+# previously served manifest during a rollover.
+
+<IfModule mod_headers.c>
+    # Content-hashed assets never change under a given name: cache for a year.
+    <FilesMatch "\.[0-9a-f]{8}\.(glb|ktx2)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+
+    # Stable-named scene descriptors: revalidate every load so new hashed URIs
+    # are picked up immediately.
+    <FilesMatch "(^|/)(manifest|index)\.json$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+
+    # Stable-named thumbnails: short cache, they may be regenerated in place.
+    <FilesMatch "_thumb\.jpg$">
+        Header set Cache-Control "public, max-age=3600"
+    </FilesMatch>
+</IfModule>
+
+# Ensure the glTF binary + KTX2 are served with sensible types (Apache may not
+# know them out of the box).
+<IfModule mod_mime.c>
+    AddType model/gltf-binary .glb
+    AddType image/ktx2        .ktx2
+</IfModule>
