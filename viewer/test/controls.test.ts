@@ -41,9 +41,9 @@ describe('Controls', () => {
     document.body.append(mount);
   });
 
-  it('renders one band button per variant with labels', () => {
+  it('renders one band button per variant with labels, in the bands panel', () => {
     new Controls(mount, makeHost());
-    const bands = mount.querySelectorAll<HTMLButtonElement>('.band');
+    const bands = mount.querySelectorAll<HTMLButtonElement>('.bands-panel .band');
     expect(bands).toHaveLength(2);
     expect([...bands].map((b) => b.textContent)).toEqual(['RGB', 'IR 1050nm']);
   });
@@ -63,62 +63,87 @@ describe('Controls', () => {
     expect(bands[1]!.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('houses the raking controls in a Light popover behind the ☀ button', () => {
+  it('opens the bands panel on load and the Layers button toggles it', () => {
     new Controls(mount, makeHost());
-    const trigger = mount.querySelector<HTMLButtonElement>('.popover-trigger.light')!;
-    expect(trigger).not.toBeNull();
-    expect(trigger.getAttribute('aria-label')).toBe('Raking light');
-    // The panel exists but is hidden until the button is clicked.
-    const panel = trigger.closest('.popover')!.querySelector<HTMLDivElement>('.popover-panel')!;
+    const layers = mount.querySelector<HTMLButtonElement>('.tbtn.layers')!;
+    const panel = mount.querySelector<HTMLDivElement>('.bands-panel')!;
+    expect(panel.hidden).toBe(false); // primary control visible on load
+    expect(layers.getAttribute('aria-pressed')).toBe('true');
+    layers.click();
     expect(panel.hidden).toBe(true);
-    expect(mount.querySelector('.light-dial')).not.toBeNull();
-    trigger.click();
+    expect(layers.getAttribute('aria-pressed')).toBe('false');
+    layers.click();
     expect(panel.hidden).toBe(false);
   });
 
-  it('seeds the dial + elevation slider from the host; elevation slider reports angles', () => {
+  it('Light button toggles the raking-light panel (closed on load)', () => {
+    new Controls(mount, makeHost());
+    const light = mount.querySelector<HTMLButtonElement>('.tbtn.light')!;
+    expect(light.getAttribute('aria-label')).toBe('Raking light');
+    const panel = mount.querySelector<HTMLDivElement>('.light-panel')!;
+    expect(panel.hidden).toBe(true);
+    expect(mount.querySelector('.light-dial')).not.toBeNull();
+    light.click();
+    expect(panel.hidden).toBe(false);
+    expect(light.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('Exposure button toggles the exposure panel and is independent of Light', () => {
+    new Controls(mount, makeHost());
+    const light = mount.querySelector<HTMLButtonElement>('.tbtn.light')!;
+    const exposure = mount.querySelector<HTMLButtonElement>('.tbtn.adjust')!;
+    expect(exposure.getAttribute('aria-label')).toBe('Exposure');
+    // Open both — panels are toggles, not modals, so they coexist (stacked bottom-right).
+    light.click();
+    exposure.click();
+    expect(mount.querySelector<HTMLDivElement>('.light-panel')!.hidden).toBe(false);
+    expect(mount.querySelector<HTMLDivElement>('.adjust-panel')!.hidden).toBe(false);
+    expect(light.getAttribute('aria-pressed')).toBe('true');
+    expect(exposure.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('docks the Light and Exposure panels bottom-right, bands bottom-left', () => {
+    new Controls(mount, makeHost());
+    const br = mount.querySelector<HTMLDivElement>('.dock-br')!;
+    const bl = mount.querySelector<HTMLDivElement>('.dock-bl')!;
+    expect(br.querySelector('.light-panel')).not.toBeNull();
+    expect(br.querySelector('.adjust-panel')).not.toBeNull();
+    expect(bl.querySelector('.bands-panel')).not.toBeNull();
+  });
+
+  it('seeds the dial from the host; dial keyboard reports azimuth + elevation', () => {
     const host = makeHost();
     new Controls(mount, host);
     const dial = mount.querySelector<HTMLDivElement>('.light-dial')!;
     expect(dial.getAttribute('aria-valuenow')).toBe('45'); // azimuth
-    const el = mount.querySelector<HTMLInputElement>('.light-el input[type="range"]')!;
-    expect(el.value).toBe('22'); // elevation
-
-    el.value = '5';
-    el.dispatchEvent(new Event('input'));
-    expect(host.raked.at(-1)).toEqual([45, 5]); // current azimuth + new elevation
-  });
-
-  it('dragging-equivalent dial keyboard input reports azimuth with current elevation', () => {
-    const host = makeHost();
-    new Controls(mount, host);
-    const dial = mount.querySelector<HTMLDivElement>('.light-dial')!;
     dial.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
     expect(host.raked.at(-1)).toEqual([50, 22]); // az +5, elevation unchanged
+    dial.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+    expect(host.raked.at(-1)).toEqual([50, 27]); // el +5, azimuth unchanged
   });
 
   it('Reset returns the raking light to the default azimuth/elevation', () => {
     const host = makeHost({ raking: { azimuth: 200, elevation: 80 } });
     new Controls(mount, host);
-    const reset = mount.querySelector<HTMLButtonElement>('.panel-reset')!;
+    const reset = mount.querySelector<HTMLButtonElement>('.light-panel .panel-reset')!;
     reset.click();
     expect(host.raked.at(-1)).toEqual([45, 22]);
-    const el = mount.querySelector<HTMLInputElement>('.light-el input[type="range"]')!;
-    expect(el.value).toBe('22');
+    const dial = mount.querySelector<HTMLDivElement>('.light-dial')!;
+    expect(dial.getAttribute('aria-valuenow')).toBe('45');
   });
 
   it('reset-view button asks the host to reframe', () => {
     const framed: number[] = [];
     const host = makeHost({ resetView: () => framed.push(1) });
     new Controls(mount, host);
-    mount.querySelector<HTMLButtonElement>('.reset-view')!.click();
+    mount.querySelector<HTMLButtonElement>('.tbtn.reset-view')!.click();
     expect(framed).toEqual([1]);
   });
 
   it('toggles measure mode via the host on click', () => {
     const host = makeHost();
     const controls = new Controls(mount, host);
-    const button = mount.querySelector<HTMLButtonElement>('.measure')!;
+    const button = mount.querySelector<HTMLButtonElement>('.tbtn.measure')!;
     button.click();
     expect(host.measured).toEqual([true]);
     // Host reflects state back onto the button; a second click requests the opposite.
@@ -131,7 +156,7 @@ describe('Controls', () => {
     const panned: boolean[] = [];
     const host = makeHost({ setPanMode: (on) => panned.push(on) });
     const controls = new Controls(mount, host);
-    const button = mount.querySelector<HTMLButtonElement>('.tool.pan')!;
+    const button = mount.querySelector<HTMLButtonElement>('.tbtn.pan')!;
     button.click();
     expect(panned).toEqual([true]);
     controls.setPanning(true);
@@ -144,7 +169,7 @@ describe('Controls', () => {
     const cleared: number[] = [];
     const host = makeHost({ clearMeasurement: () => cleared.push(1) });
     const controls = new Controls(mount, host);
-    const clear = mount.querySelector<HTMLButtonElement>('.measure-clear')!;
+    const clear = mount.querySelector<HTMLButtonElement>('.tbtn.measure-clear')!;
     expect(clear.hidden).toBe(true);
     controls.setHasMeasurement(true);
     expect(clear.hidden).toBe(false);
@@ -154,11 +179,9 @@ describe('Controls', () => {
     expect(clear.hidden).toBe(true);
   });
 
-  it('houses brightness/contrast in an Adjust popover behind the ◑ button', () => {
+  it('seeds the exposure sliders from the host and calls the host on input', () => {
     const host = makeHost({ imageAdjust: { brightness: 20, contrast: -10 } });
     new Controls(mount, host);
-    const trigger = mount.querySelector<HTMLButtonElement>('.popover-trigger.adjust')!;
-    expect(trigger.getAttribute('aria-label')).toBe('Image adjust');
     const sliders = mount.querySelectorAll<HTMLInputElement>('.adjust-panel input[type="range"]');
     expect(sliders).toHaveLength(2);
     expect(sliders[0]!.value).toBe('20'); // brightness seeded
@@ -169,19 +192,17 @@ describe('Controls', () => {
     expect(host.adjusted.at(-1)).toEqual({ brightness: 55, contrast: -10 });
   });
 
-  it('Adjust Reset zeroes brightness and contrast', () => {
+  it('Exposure Reset zeroes brightness and contrast', () => {
     const host = makeHost({ imageAdjust: { brightness: 40, contrast: 30 } });
     new Controls(mount, host);
-    // The Adjust panel's Reset is the 2nd .panel-reset (Light is 1st).
-    const resets = mount.querySelectorAll<HTMLButtonElement>('.panel-reset');
-    resets[1]!.click();
+    mount.querySelector<HTMLButtonElement>('.adjust-panel .panel-reset')!.click();
     expect(host.adjusted.at(-1)).toEqual({ brightness: 0, contrast: 0 });
     const sliders = mount.querySelectorAll<HTMLInputElement>('.adjust-panel input[type="range"]');
     expect(sliders[0]!.value).toBe('0');
     expect(sliders[1]!.value).toBe('0');
   });
 
-  it('reflects a variant switch into the Adjust sliders without calling the host', () => {
+  it('reflects a variant switch into the exposure sliders without calling the host', () => {
     const host = makeHost();
     const controls = new Controls(mount, host);
     controls.setImageAdjust({ brightness: -25, contrast: 15 });
@@ -189,65 +210,6 @@ describe('Controls', () => {
     expect(sliders[0]!.value).toBe('-25');
     expect(sliders[1]!.value).toBe('15');
     expect(host.adjusted).toHaveLength(0); // reflection only, no host round-trip
-  });
-
-  it('Light and Adjust popovers are mutually exclusive', () => {
-    new Controls(mount, makeHost());
-    const light = mount.querySelector<HTMLButtonElement>('.popover-trigger.light')!;
-    const adjust = mount.querySelector<HTMLButtonElement>('.popover-trigger.adjust')!;
-    light.click();
-    expect(light.getAttribute('aria-expanded')).toBe('true');
-    adjust.click();
-    expect(adjust.getAttribute('aria-expanded')).toBe('true');
-    expect(light.getAttribute('aria-expanded')).toBe('false'); // opening Adjust closed Light
-  });
-
-  it('houses pan/measure/clear inside a Tools popover', () => {
-    new Controls(mount, makeHost());
-    const trigger = mount.querySelector<HTMLButtonElement>('.popover-trigger.tools')!;
-    expect(trigger.getAttribute('aria-label')).toBe('Tools');
-    const panel = trigger.closest('.popover')!;
-    expect(panel.querySelector('.tool.pan')).not.toBeNull();
-    expect(panel.querySelector('.tool.measure')).not.toBeNull();
-    expect(panel.querySelector('.measure-clear')).not.toBeNull();
-  });
-
-  it('closes the Tools popover when a tool is activated (frees the canvas)', () => {
-    const controls = new Controls(mount, makeHost());
-    const tools = mount.querySelector<HTMLButtonElement>('.popover-trigger.tools')!;
-    tools.click();
-    expect(tools.getAttribute('aria-expanded')).toBe('true');
-    mount.querySelector<HTMLButtonElement>('.tool.measure')!.click(); // turn measure ON
-    expect(tools.getAttribute('aria-expanded')).toBe('false');
-    // Turning a tool OFF (2nd click) does not reopen the popover.
-    controls.setMeasuring(true);
-    mount.querySelector<HTMLButtonElement>('.tool.measure')!.click();
-    expect(tools.getAttribute('aria-expanded')).toBe('false');
-  });
-
-  it('expand toggle flips data-expanded and its aria state', () => {
-    new Controls(mount, makeHost());
-    const root = mount.querySelector<HTMLDivElement>('.ui')!;
-    const toggle = mount.querySelector<HTMLButtonElement>('.expand-toggle')!;
-    expect(root.dataset['expanded']).toBeUndefined();
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    toggle.click();
-    expect(root.dataset['expanded']).toBe('true');
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    toggle.click();
-    expect(root.dataset['expanded']).toBeUndefined();
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-  });
-
-  it('collapsing closes any open popover so it is not stranded', () => {
-    new Controls(mount, makeHost());
-    const toggle = mount.querySelector<HTMLButtonElement>('.expand-toggle')!;
-    toggle.click(); // expand
-    const light = mount.querySelector<HTMLButtonElement>('.popover-trigger.light')!;
-    light.click();
-    expect(light.getAttribute('aria-expanded')).toBe('true');
-    toggle.click(); // collapse
-    expect(light.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('removes its DOM on dispose', () => {

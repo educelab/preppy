@@ -1,19 +1,30 @@
-// The "light ball": a shaded-sphere azimuth dial for the raking light.
+// The "light ball": a shaded-sphere dial for the raking light — the SOLE control (the
+// former elevation slider is gone; feedback 2026-07-10).
 //
-// It reads as a top-down view of the light hemisphere. DRAGGING sets AZIMUTH only
-// (pointer angle → azimuth); elevation is driven separately (the panel's vertical
-// slider) and slides the puck RADIALLY: the puck rides at radius = cos(elevation) —
-// overhead (el 90°) sits at the centre, grazing (el ~0°) at the rim — so the ball
-// always depicts the true light direction. This matches viewer.applyRakingLight's
-// azimuth-in-XY / elevation-out-of-plane convention (el 90° = straight-on).
+// It reads as a top-down view of the light hemisphere. DRAGGING the puck sets BOTH
+// angles: pointer ANGLE → azimuth, pointer RADIUS → elevation. The puck rides at
+// radius = cos(elevation) — overhead (el 90°) sits at the centre, grazing (el ~0°) at
+// the rim — so dragging toward the centre lifts the light overhead and toward the rim
+// grazes it, and the ball always depicts the true light direction. This matches
+// viewer.applyRakingLight's azimuth-in-XY / elevation-out-of-plane convention
+// (el 90° = straight-on). A snap zone at the centre (see SNAP_RADIUS) pins the puck to
+// overhead when dragged near the middle, and a ring drawn there advertises it.
 //
-// The dial is a `role="slider"` over azimuth (0–360°) with the standard keyboard
-// model. The shaded sphere is drawn on a canvas; the puck is a DOM node so it carries
-// crisp focus styling. Canvas rendering is guarded so it no-ops under happy-dom.
+// The dial is a `role="slider"` (primary axis azimuth 0–360°); keyboard: ←/→ azimuth,
+// ↑/↓ elevation (±5°, Shift ±1°), Home/End azimuth ends. The shaded sphere is drawn on
+// a canvas; the puck is a DOM node so it carries crisp focus styling. Canvas rendering
+// is guarded so it no-ops under happy-dom.
 
 /** Puck distance from centre for a given elevation, as a fraction-scaled radius. */
 export function elevationToRadius(elevationDeg: number, radius: number): number {
   return radius * Math.cos((elevationDeg * Math.PI) / 180);
+}
+
+/** Elevation (deg, [0,90]) for a puck at screen distance `dist` from centre (inverse of
+ *  {@link elevationToRadius}); clamps beyond the rim to grazing (0°). */
+export function radiusToElevation(dist: number, radius: number): number {
+  const frac = Math.min(1, Math.max(0, dist / radius));
+  return (Math.acos(frac) * 180) / Math.PI;
 }
 
 /**
@@ -40,11 +51,16 @@ export function pointToAzimuth(dx: number, dy: number): number {
 const SIZE = 108; // dial box, px
 const RADIUS = 46; // sphere radius within the box, px
 const CENTER = SIZE / 2;
+// Drag the puck within this many px of centre and it snaps to overhead (el 90°) — the
+// neutral "straight-on" position, otherwise a fiddly target since azimuth is undefined
+// there. A ring of this radius is painted at centre to advertise the snap zone
+// (feedback 2026-07-10).
+const SNAP_RADIUS = 6;
 
 export interface LightDialOptions {
   azimuth: number;
   elevation: number;
-  /** User changed azimuth (drag/keyboard) or elevation (setElevation with emit). */
+  /** User changed azimuth and/or elevation (puck drag or keyboard). */
   onInput?: (azimuth: number, elevation: number) => void;
   /** Double-click on the ball requests a reset (panel supplies the defaults). */
   onReset?: () => void;
@@ -68,8 +84,9 @@ export class LightDial {
 
     this.root = document.createElement('div');
     this.root.className = 'light-dial';
+    // Primary axis is azimuth (a slider); elevation rides the radius (↑/↓ keys, drag).
     this.root.setAttribute('role', 'slider');
-    this.root.setAttribute('aria-label', 'Light azimuth');
+    this.root.setAttribute('aria-label', 'Light direction (azimuth ←/→, elevation ↑/↓)');
     this.root.setAttribute('aria-valuemin', '0');
     this.root.setAttribute('aria-valuemax', '360');
     this.root.tabIndex = 0;
@@ -142,40 +159,49 @@ export class LightDial {
     this.root.releasePointerCapture?.(event.pointerId);
   };
 
-  /** Drag maps the pointer angle → azimuth; radius (elevation) is left untouched. */
+  /** Drag maps the pointer angle → azimuth and the pointer radius → elevation. */
   #setFromPointer(event: PointerEvent): void {
     const rect = this.root.getBoundingClientRect();
     const dx = event.clientX - rect.left - CENTER;
     const dy = event.clientY - rect.top - CENTER;
-    if (dx === 0 && dy === 0) {
-      return;
+    const dist = Math.hypot(dx, dy);
+    // Inside the snap zone (or at the exact centre, where azimuth is undefined) pin to
+    // overhead and keep the current azimuth; otherwise map radius→elevation, angle→azimuth.
+    if (dist <= SNAP_RADIUS) {
+      this.#elevation = 90;
+    } else {
+      this.#elevation = radiusToElevation(dist, RADIUS);
+      this.#azimuth = pointToAzimuth(dx, dy);
     }
-    this.setAzimuth(pointToAzimuth(dx, dy), true);
+    this.#render();
+    this.#onInput?.(this.#azimuth, this.#elevation);
   }
 
   #onKeyDown = (event: KeyboardEvent): void => {
     const step = event.shiftKey ? 1 : 5;
-    let next: number | null = null;
     switch (event.key) {
       case 'ArrowRight':
-      case 'ArrowUp':
-        next = this.#wrap(this.#azimuth + step);
+        this.setAzimuth(this.#wrap(this.#azimuth + step), true);
         break;
       case 'ArrowLeft':
+        this.setAzimuth(this.#wrap(this.#azimuth - step), true);
+        break;
+      case 'ArrowUp':
+        this.setElevation(this.#elevation + step, true);
+        break;
       case 'ArrowDown':
-        next = this.#wrap(this.#azimuth - step);
+        this.setElevation(this.#elevation - step, true);
         break;
       case 'Home':
-        next = 0;
+        this.setAzimuth(0, true);
         break;
       case 'End':
-        next = 360;
+        this.setAzimuth(360, true);
         break;
       default:
         return;
     }
     event.preventDefault();
-    this.setAzimuth(next, true);
   };
 
   /** Wrap an azimuth into [0,360) so arrow-stepping crosses the 0/360 seam cleanly. */
@@ -184,10 +210,12 @@ export class LightDial {
   }
 
   #render(): void {
-    // aria: report azimuth as the slider value.
-    const rounded = Math.round(this.#azimuth);
-    this.root.setAttribute('aria-valuenow', String(rounded));
-    this.root.setAttribute('aria-valuetext', `${rounded}°`);
+    // aria: azimuth is the slider value; valuetext also voices the elevation the puck
+    // radius encodes, since ↑/↓ and radial drag change it.
+    const az = Math.round(this.#azimuth);
+    const el = Math.round(this.#elevation);
+    this.root.setAttribute('aria-valuenow', String(az));
+    this.root.setAttribute('aria-valuetext', `azimuth ${az}°, elevation ${el}°`);
 
     const { x, y } = azimuthToPoint(this.#azimuth, this.#elevation, RADIUS);
     this.#puck.style.left = `${CENTER + x}px`;
@@ -216,6 +244,19 @@ export class LightDial {
     ctx.fill();
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(240, 179, 90, 0.35)';
+    ctx.stroke();
+
+    // Snap-zone ring at centre: dim normally, filled + brightened while the puck is
+    // snapped overhead so the state reads at a glance.
+    const snapped = this.#elevation >= 90;
+    ctx.beginPath();
+    ctx.arc(CENTER, CENTER, SNAP_RADIUS, 0, Math.PI * 2);
+    if (snapped) {
+      ctx.fillStyle = 'rgba(246, 230, 200, 0.22)';
+      ctx.fill();
+    }
+    ctx.lineWidth = snapped ? 1.5 : 1;
+    ctx.strokeStyle = snapped ? 'rgba(246, 230, 200, 0.9)' : 'rgba(246, 230, 200, 0.35)';
     ctx.stroke();
   }
 }

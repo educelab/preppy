@@ -37,7 +37,7 @@ test('renders built-in controls and measures a real cm distance', async ({ page 
   const el = page.locator('dri-viewer');
 
   // Control cluster present, one band button per variant, active band reflected.
-  await expect(page.locator('dri-viewer .ui')).toBeVisible();
+  await expect(page.locator('dri-viewer .toolbar')).toBeVisible();
   await expect(page.locator('dri-viewer .band')).toHaveCount(4);
   await expect(page.locator('dri-viewer .band[aria-pressed="true"]')).toHaveText('RGB');
 
@@ -49,10 +49,9 @@ test('renders built-in controls and measures a real cm distance', async ({ page 
   expect(diagonal.boundingDiagonal).toBeGreaterThan(10);
   expect(diagonal.boundingDiagonal).toBeLessThan(200);
 
-  // Enter measure mode (via the Tools popover) and click two points on the surface.
-  await page.locator('dri-viewer .popover-trigger.tools').click();
-  await page.locator('dri-viewer .measure').click();
-  await expect(page.locator('dri-viewer .measure')).toHaveAttribute('aria-pressed', 'true');
+  // Enter measure mode (floating top-right button) and click two points on the surface.
+  await page.locator('dri-viewer .tbtn.measure').click();
+  await expect(page.locator('dri-viewer .tbtn.measure')).toHaveAttribute('aria-pressed', 'true');
 
   const box = (await el.boundingBox())!;
   await page.mouse.click(box.x + box.width * 0.42, box.y + box.height * 0.5);
@@ -74,7 +73,9 @@ test('renders built-in controls and measures a real cm distance', async ({ page 
   await el.screenshot({ path: 'test-results/phase4-measure.png' });
 });
 
-test('raking-light slider changes the light elevation', async ({ page }) => {
+test('the light dial drives the raking-light elevation (puck only, no slider)', async ({
+  page,
+}) => {
   const fixture = await page.request.get(MANIFEST);
   test.skip(!fixture.ok(), 'sample assets not present in public/fixtures/');
 
@@ -84,18 +85,20 @@ test('raking-light slider changes the light elevation', async ({ page }) => {
   const before = (await el.evaluate((n) =>
     (n as unknown as { getRakingLight(): { elevation: number } }).getRakingLight(),
   )) as { elevation: number };
+  expect(before.elevation).toBe(22); // default rig
 
-  // Open the Light popover and drive its elevation slider to grazing.
-  await page.locator('dri-viewer .popover-trigger.light').click();
-  const elevation = page.locator('dri-viewer .light-el input[type="range"]');
-  await elevation.fill('5');
-  await elevation.dispatchEvent('input');
+  // The elevation slider is gone; the dial's puck (keyboard ↓ here) drives elevation.
+  await page.locator('dri-viewer .tbtn.light').click();
+  await expect(page.locator('dri-viewer .light-el')).toHaveCount(0); // slider removed
+  await page.locator('dri-viewer .light-dial').focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown'); // 22 − 15 = 7°
 
   const after = (await el.evaluate((n) =>
     (n as unknown as { getRakingLight(): { elevation: number } }).getRakingLight(),
   )) as { elevation: number };
-  expect(after.elevation).toBe(5);
-  expect(after.elevation).not.toBe(before.elevation);
+  expect(after.elevation).toBe(7);
 });
 
 test('ui="none" hides the built-in controls', async ({ page }) => {

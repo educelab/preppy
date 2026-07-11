@@ -61,21 +61,26 @@ Additional JS-only members:
 - `activeVariant: string` — the variant currently shown (read-only).
 - `setMeasuring(on: boolean)` / `measuring: boolean` — toggle two-point measure mode.
 - `setRakingLight(azimuth, elevation)` / `getRakingLight()` — aim the raking key light
-  (degrees; low elevation = grazing/relief-revealing). The built-in UI exposes this as a
-  ☀ "light ball" popover: drag the shaded sphere to set azimuth, the vertical slider sets
-  elevation (sliding the puck radially), Reset returns to az 45° / el 22°.
+  (degrees; low elevation = grazing/relief-revealing). The built-in UI exposes this as the
+  ☀ "light ball": **drag the puck** to set azimuth (angle) and elevation (radius — centre
+  is overhead, rim is grazing); ←/→ step azimuth and ↑/↓ step elevation; Reset returns to
+  az 45° / el 22°.
 - `resetView()` — reframe the camera on the current model (the built-in ⤢ button).
 - `setImageAdjust({ brightness, contrast })` / `getImageAdjust()` — per-variant runtime
   brightness/contrast on the mesh albedo (slider units −100…+100, 0 = identity). In-memory
   and keyed by variant id: kept when toggling variants, cleared on a new manifest. Exposed
-  in the UI as a ◑ popover; measurement overlays and the raking response are unaffected.
+  in the UI as the ◑ Exposure panel; measurement overlays and the raking response are
+  unaffected.
 - `maxCachedVariants: number` — cap resident variant models (0 = keep all, the default;
   a handful of 8K variants coexist comfortably).
 - `getRenderStats()` / `getCameraState()` — diagnostics.
 
-The built-in control bar is **responsive** (it reacts to the widget's own width, not the
-page's): on a narrow embed it docks to the bottom edge, keeps the band (layer) pickers
-visible, and tucks the Tools/Light/Adjust popovers and reset-view behind a ⋯ toggle.
+The built-in chrome is a floating cluster of icon buttons in the **top-right** — Layers,
+Light (☀), Exposure (◑), Pan, Measure and Reset-view (⤢), plus a Clear button while a
+measurement is drawn. Each button is a plain **toggle** that shows/hides a panel docked at
+a fixed location: the band (layer) pickers bottom-left (open on load), and the Light +
+Exposure panels bottom-right (stacked when both are open). Panels shrink to fit a narrow
+embed; the overlay is pointer-transparent so the canvas stays interactive around it.
 
 ### Events
 

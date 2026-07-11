@@ -5,6 +5,7 @@ import {
   azimuthToPoint,
   pointToAzimuth,
   elevationToRadius,
+  radiusToElevation,
 } from '../src/light-dial';
 
 const R = 100;
@@ -15,6 +16,13 @@ describe('light-dial mappings', () => {
     near(elevationToRadius(90, R), 0); // straight-on: puck at centre
     near(elevationToRadius(0, R), R); // grazing: puck at rim
     near(elevationToRadius(60, R), R * 0.5); // cos60 = 0.5
+  });
+
+  it('radiusToElevation inverts elevationToRadius and clamps past the rim', () => {
+    near(radiusToElevation(0, R), 90); // centre → overhead
+    near(radiusToElevation(R, R), 0); // rim → grazing
+    near(radiusToElevation(R * 0.5, R), 60); // acos(0.5) = 60°
+    near(radiusToElevation(R * 1.5, R), 0); // beyond the rim clamps to grazing
   });
 
   it('azimuthToPoint places the puck around the circle (screen y down-positive)', () => {
@@ -64,17 +72,17 @@ describe('LightDial interaction', () => {
     return { dial, inputs };
   }
 
-  it('exposes role=slider with azimuth aria state', () => {
+  it('exposes role=slider with azimuth aria state (valuetext voices elevation too)', () => {
     const { dial } = make();
     expect(dial.root.getAttribute('role')).toBe('slider');
     expect(dial.root.getAttribute('aria-valuemin')).toBe('0');
     expect(dial.root.getAttribute('aria-valuemax')).toBe('360');
     expect(dial.root.getAttribute('aria-valuenow')).toBe('45');
-    expect(dial.root.getAttribute('aria-valuetext')).toBe('45°');
-    expect(dial.root.getAttribute('aria-label')).toBe('Light azimuth');
+    expect(dial.root.getAttribute('aria-valuetext')).toBe('azimuth 45°, elevation 22°');
+    expect(dial.root.getAttribute('aria-label')).toContain('Light direction');
   });
 
-  it('arrow keys step azimuth by 5° (1° with Shift) and emit', () => {
+  it('left/right arrows step azimuth by 5° (1° with Shift) and emit', () => {
     const { dial, inputs } = make();
     dial.root.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
     expect(dial.azimuth).toBe(50);
@@ -83,6 +91,19 @@ describe('LightDial interaction', () => {
     expect(inputs).toEqual([
       [50, 22],
       [49, 22],
+    ]);
+  });
+
+  it('up/down arrows step elevation (clamped 0–90) without touching azimuth', () => {
+    const { dial, inputs } = make();
+    dial.root.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+    expect(dial.elevation).toBe(27); // 22 + 5
+    expect(dial.azimuth).toBe(45);
+    dial.root.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true }));
+    expect(dial.elevation).toBe(26); // 27 − 1
+    expect(inputs).toEqual([
+      [45, 27],
+      [45, 26],
     ]);
   });
 
@@ -107,6 +128,16 @@ describe('LightDial interaction', () => {
     expect(dial.azimuth).toBe(45);
     // aria-valuenow tracks azimuth only, unaffected by elevation.
     expect(dial.root.getAttribute('aria-valuenow')).toBe('45');
+  });
+
+  it('dragging into the centre snaps to overhead (el 90°) keeping azimuth', () => {
+    const { dial, inputs } = make({ azimuth: 45, elevation: 22 });
+    // happy-dom gives a 0-origin rect; the dial centre is at (SIZE/2, SIZE/2) = (54,54).
+    // A pointer a few px from there is inside the snap zone → pin overhead, azimuth kept.
+    dial.root.dispatchEvent(new PointerEvent('pointerdown', { clientX: 57, clientY: 52 }));
+    expect(dial.elevation).toBe(90);
+    expect(dial.azimuth).toBe(45);
+    expect(inputs.at(-1)).toEqual([45, 90]);
   });
 
   it('double-click requests a reset', () => {

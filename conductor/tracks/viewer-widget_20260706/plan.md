@@ -3,10 +3,12 @@
 **Track ID:** viewer-widget_20260706
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-07-06
-**Status:** [~] Reopened 2026-07-10 for post-delivery feedback (Phases 5–11); Phases 1–4
-complete 2026-07-09. **Phases 5–11 all implemented + headless-verified 2026-07-10**
-(unsigned commits — 1Password SSH signing unavailable in the automation context; re-sign
-on review). Awaiting user phase-gate approval and commit re-signing.
+**Status:** [~] Reopened 2026-07-10 for post-delivery feedback (Phases 5–12); Phases 1–4
+complete 2026-07-09. **Phases 5–12 all implemented + headless-verified 2026-07-10**.
+Phase 12 (floating controls + docked panels + puck-only light) is verified but
+**uncommitted** at the user's request (1Password SSH signing unavailable). Earlier phases'
+unsigned commits still need re-signing on review; Phase 12 awaits both commit + phase-gate
+approval.
 
 ## Overview
 Scaffold the TS/bundler/web-component skeleton, get one variant rendering, then
@@ -265,6 +267,53 @@ bar is icon-buttons + popovers.
       expand reveals + popover open/Esc/collapse). Full e2e green per-spec
       (phase1–4,7,9,10,11 + embed against the built bundle). Caught + fixed a stray
       backtick in a styles.ts CSS comment that closed the template literal early.
+
+## Phase 12: Floating controls + docked panels + puck-only light (feedback, 2026-07-10) — viewer
+Live-review feedback reshapes the whole control chrome from one bottom-left glass bar
+(inline bands + anchored popovers, Phase 9–11) into **floating icon buttons top-right that
+toggle panels docked at fixed screen locations**. **Decisions confirmed with the user
+(2026-07-10):**
+- **Raking light = puck only.** Remove the vertical elevation slider; the shaded-sphere
+  dial's puck now sets **both** azimuth (pointer angle) and elevation (pointer radius —
+  centre = overhead/el 90°, rim = grazing/el 0°, matching `radius = R·cos(el)`). Keyboard:
+  ←/→ azimuth, ↑/↓ elevation (±5°, Shift ±1°); Home/End azimuth ends; double-click resets.
+- **Floating top-right button cluster** (individual buttons, no glass bar): Layers, Light
+  (☀), Exposure (◑), Pan, Measure, Reset-view (⤢), and a contextual Clear (shown only while
+  a measurement is drawn). Pan/Measure stay mode toggles; Reset-view is an action.
+- **New Layers button** (inline Google-Material *layers* SVG icon — no web font/CDN) toggles
+  the bands/layers panel.
+- **Panels dock at fixed locations, toggled independently (not modals, no mutual exclusion,
+  no click-outside/focus-trap):** bands → **bottom-left** (open on load — primary control);
+  Light + Exposure → **bottom-right**, stacked when both open. A button's `aria-pressed`
+  reflects its panel's open state.
+- Retires the Phase 9 anchored-popover primitive for the built-in chrome (delete `popover.ts`
+  + its test) and the Phase 11 container-query bottom-bar + ⋯ expand toggle + Tools popover.
+  Keep all public API (`setRakingLight`/`getRakingLight`/`raking-change`,
+  `setImageAdjust`/…, `ui="none"`); no attribute/pipeline changes.
+### Tasks
+- [x] Task 12.1: Light dial puck sets azimuth AND elevation (radial drag → elevation; ↑/↓
+      keyboard); added `radiusToElevation`; dropped the elevation slider from the Light panel;
+      unit-tested the radius↔elevation mapping and keyboard.
+- [x] Task 12.2: Rebuilt `controls.ts` as a floating top-right button cluster + fixed docked
+      panels (bands bottom-left open-by-default; Light/Exposure bottom-right stacked);
+      independent toggle semantics (new `PanelToggle`, no mutual exclusion); Layers button +
+      inline Material layers SVG; Pan/Measure/Clear/Reset-view as floating icon buttons;
+      removed popover/expand/Tools scaffolding; reworked `styles.ts` for a pointer-transparent
+      overlay + toolbar + docks (retained dial/band/adjust/measure-label styling). Deleted
+      `popover.ts` + `popover.test.ts`.
+- [x] Task 12.3: Updated the affected tests to the new model — `test/controls.test.ts`,
+      `test/light-dial.test.ts`, and e2e `phase4`/`phase9`/`phase10`/`phase11`.
+### Verification
+- [x] Headless (SwiftShader) at wide + narrow widths: floating buttons reachable, no
+      horizontal overflow; toggling a button shows/hides its docked panel at the right
+      location; Light + Exposure coexist stacked bottom-right; bands open on load bottom-left;
+      dial drag (`dragging the puck sets both azimuth and elevation`) + keyboard drive
+      `getRakingLight` (az + el) and emit `raking-change`; Reset restores az 45°/el 22°;
+      Reset-view reframes; `ui="none"` hides all buttons/panels. Verified: typecheck clean,
+      **57 unit** (17 controls + 12 light-dial + …) + **26 e2e** green single-worker
+      (phase3's two texture-residency tests flake only under parallel SwiftShader GPU-memory
+      pressure — pass in isolation and single-worker; unrelated to this UI change).
+      **Not committed** — 1Password SSH signing unavailable in this context (user directive).
 
 ---
 

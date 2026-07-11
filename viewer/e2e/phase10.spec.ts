@@ -144,15 +144,15 @@ test('Adjust panel slider drives the albedo; Reset zeroes it', async ({ page }) 
   await loadDefault(page);
   const baseline = await meanLuminance(page);
 
-  await page.locator('dri-viewer .popover-trigger.adjust').click();
+  await page.locator('dri-viewer .tbtn.adjust').click();
   const brightness = page.locator('dri-viewer .adjust-panel input[type="range"]').first();
   await brightness.fill('90');
   await brightness.dispatchEvent('input');
   expect(await getAdjust(page)).toEqual({ brightness: 90, contrast: 0 });
   expect(await meanLuminance(page)).toBeGreaterThan(baseline + 10);
 
-  // Second .panel-reset is the Adjust panel's (Light is first).
-  await page.locator('dri-viewer .panel-reset').nth(1).click();
+  // The Exposure panel's own Reset (scoped so we don't hit the hidden Light panel's).
+  await page.locator('dri-viewer .adjust-panel .panel-reset').click();
   expect(await getAdjust(page)).toEqual({ brightness: 0, contrast: 0 });
   expect(Math.abs((await meanLuminance(page)) - baseline)).toBeLessThan(6);
 });
@@ -162,8 +162,7 @@ test('adjusting the albedo leaves the measurement value untouched', async ({ pag
   await loadDefault(page);
   const el = page.locator('dri-viewer');
 
-  await page.locator('dri-viewer .popover-trigger.tools').click();
-  await page.locator('dri-viewer .measure').click();
+  await page.locator('dri-viewer .tbtn.measure').click();
   const box = (await el.boundingBox())!;
   await page.mouse.click(box.x + box.width * 0.42, box.y + box.height * 0.5);
   await page.mouse.click(box.x + box.width * 0.6, box.y + box.height * 0.55);
@@ -180,7 +179,7 @@ test('ui="none" hides the ◑ button (API still works)', async ({ page }) => {
   test.skip(!(await page.request.get(MANIFEST)).ok(), 'sample assets not present');
   await loadDefault(page);
   await page.locator('dri-viewer').evaluate((n) => n.setAttribute('ui', 'none'));
-  await expect(page.locator('dri-viewer .popover-trigger.adjust')).toHaveCount(0);
+  await expect(page.locator('dri-viewer .tbtn.adjust')).toHaveCount(0);
   // The API is unaffected by chrome visibility.
   await setAdjust(page, { brightness: 25 });
   expect(await getAdjust(page)).toEqual({ brightness: 25, contrast: 0 });
