@@ -5,9 +5,9 @@
   "status": "in_progress",
   "created": "2026-07-06T18:56:11Z",
   "updated": "2026-07-11T12:00:00Z",
-  "current_phase": 1,
-  "current_task": "1.6",
+  "current_phase": 2,
+  "current_task": "2.1",
   "depends_on": ["delivery-pipeline_20260706", "viewer-widget_20260706"],
-  "phases": { "total": 3, "completed": 0 },
+  "phases": { "total": 3, "completed": 1 },
   "tasks": { "total": 14, "completed": 9 }
 }

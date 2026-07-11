@@ -70,11 +70,17 @@ back-catalog migration (Phase 2) feeds them arbitrary legacy objects.
       correct the comment. Minor: tidy the double-negative control flow in
       `DriViewer.#preloadOthers` while here.
 ### Verification
-- [ ] Over-budget decimation is caught; CI green on the new toolchain (incl. viewer
-      tests); a11y pass.
-- [ ] `bake_normals` correct for a normal-bearing and a negative-index OBJ
-      (regression tests green); viewer memory policy documented; +Z assumption
-      either removed or documented as a delivery precondition.
+- [x] Over-budget decimation is caught (unit + live gate tests); CI reworked for the
+      new toolchain (jobs verified locally: pytest 3.11–3.13 + `-h`, viewer
+      typecheck/unit/e2e); a11y basics pass (unit + phase4 e2e).
+- [x] `bake_normals` correct for a normal-bearing and a negative-index OBJ
+      (regression tests green + verified on real vn-bearing spike OBJs); viewer
+      memory policy documented; +Z assumption documented as a delivery precondition.
+
+_Deferred (external/manual, tracked): on-device many-variant memory pass (1.3);
+host-specific `Cache-Control` tuning once the host is known (1.4); provisioning
+e2e fixtures on CI so the WebGL specs run there (1.6); keyboard camera navigation
+as its own follow-up (1.5)._
 
 ## Phase 2: Migrate back-catalog (Phase 5)
 ### Tasks
