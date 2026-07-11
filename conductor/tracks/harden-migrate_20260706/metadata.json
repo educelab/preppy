@@ -9,5 +9,5 @@
   "current_task": "1.6",
   "depends_on": ["delivery-pipeline_20260706", "viewer-widget_20260706"],
   "phases": { "total": 3, "completed": 0 },
-  "tasks": { "total": 14, "completed": 8 }
+  "tasks": { "total": 14, "completed": 9 }
 }

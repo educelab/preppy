@@ -137,3 +137,8 @@ npm run test:e2e           # Playwright (real WebGL): render, camera-preservatio
 
 The e2e/render tests use a sample object under `public/fixtures/` (gitignored); they skip
 cleanly when it's absent, so a bare checkout still runs unit tests + the empty-widget check.
+`test:e2e` needs a prior `npm run build` for the embedding spec (`embed.spec`).
+
+CI (`.gitlab-ci.yml`) runs `viewer:typecheck` and `viewer:test` as required gates and
+`viewer:e2e` (Playwright image) as non-blocking — the WebGL specs self-skip on CI until the
+sample fixtures are provisioned there, but the build/harness still gets exercised.

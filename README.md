@@ -127,6 +127,22 @@ during a rollover can still resolve its (now-previous-generation) hashed URIs.
 See [`docs/hosting/htaccess.example`](docs/hosting/htaccess.example) for a
 ready-to-adapt Apache configuration (final host TBD; tune to your deployment).
 
+## Testing
+
+```shell
+pip install -e '.[test]'    # pytest (+ pymeshlab/pyrender via [validate]/[preview])
+python -m pytest tests/
+```
+
+Tests that need the external toolchain (`magick`/`ktx`/`gltfpack`/`node`), `pymeshlab`,
+or an offscreen-GL backend **skip cleanly** when those are absent, so a bare run still
+covers the pure logic. CI runs this across Python 3.11–3.13 (plus a manual `integration`
+job that exercises the full toolchain); see `.gitlab-ci.yml`.
+
+The `<dri-viewer>` web component in [`viewer/`](viewer/) has its own suite — TypeScript
+typecheck, Vitest units, and Playwright e2e — wired into CI alongside the Python jobs.
+See [`viewer/README.md`](viewer/README.md#development).
+
 ### Legacy path (deprecated)
 
 The single-object `voyager-obj2glb` tool (and its `convert.py` core) still uses
