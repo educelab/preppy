@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import type { Material } from 'three';
 import {
   adjustDisplay,
   toFactor,
   isIdentity,
   IDENTITY_ADJUST,
+  installAdjustShader,
 } from '../src/image-adjust';
 
 describe('image-adjust formula', () => {
@@ -66,5 +68,60 @@ describe('isIdentity', () => {
     expect(isIdentity({ brightness: 0, contrast: 0 })).toBe(true);
     expect(isIdentity({ brightness: 1, contrast: 0 })).toBe(false);
     expect(isIdentity({ brightness: 0, contrast: -3 })).toBe(false);
+  });
+});
+
+// A fake material/shader so the patch is exercised off the GPU (happy-dom).
+function fakeMaterial(type = 'MeshStandardMaterial'): Material {
+  return { type, needsUpdate: false } as unknown as Material;
+}
+function fakeShader(fragmentShader = '#include <common>\n#include <map_fragment>') {
+  return { uniforms: {} as Record<string, unknown>, fragmentShader };
+}
+function compile(mat: Material, shader: ReturnType<typeof fakeShader>): void {
+  (mat as unknown as { onBeforeCompile: (s: unknown) => void }).onBeforeCompile(shader);
+}
+const uniformCount = (s: string) => (s.match(/uniform float uBrightness/g) ?? []).length;
+
+describe('installAdjustShader', () => {
+  it('injects the header + body once and defines the uniforms', () => {
+    const mat = fakeMaterial();
+    installAdjustShader(mat);
+    const shader = fakeShader();
+    compile(mat, shader);
+    expect(uniformCount(shader.fragmentShader)).toBe(1);
+    expect(shader.fragmentShader).toContain('driLinToSRGB');
+    expect(shader.uniforms['uBrightness']).toBeDefined();
+    expect(shader.uniforms['uContrast']).toBeDefined();
+  });
+
+  it('is idempotent per material: a second install is a no-op returning the same handle', () => {
+    const mat = fakeMaterial();
+    const h1 = installAdjustShader(mat);
+    const h2 = installAdjustShader(mat);
+    expect(h2).toBe(h1);
+    const shader = fakeShader();
+    compile(mat, shader);
+    // NOT 2 — a double patch would inject the header twice (duplicate-uniform compile error).
+    expect(uniformCount(shader.fragmentShader)).toBe(1);
+  });
+
+  it('applies a set() issued before compile once the shader compiles', () => {
+    const mat = fakeMaterial();
+    const handle = installAdjustShader(mat);
+    handle.set({ brightness: 100, contrast: -100 });
+    const shader = fakeShader();
+    compile(mat, shader);
+    expect((shader.uniforms['uBrightness'] as { value: number }).value).toBeCloseTo(1);
+    expect((shader.uniforms['uContrast'] as { value: number }).value).toBeCloseTo(-1);
+  });
+
+  it('warns in dev when the material lacks the PBR shader chunks', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const mat = fakeMaterial('LineBasicMaterial');
+    installAdjustShader(mat);
+    compile(mat, fakeShader('void main() {}'));  // no <common>/<map_fragment>
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });

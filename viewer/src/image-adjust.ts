@@ -77,34 +77,55 @@ interface AdjustUniforms {
   uContrast: { value: number };
 }
 
-/** A three material extended enough to patch (onBeforeCompile + needsUpdate). */
+/** A three material extended enough to patch (onBeforeCompile + needsUpdate), plus
+ * a private marker stashing the installed handle so re-installs are true no-ops. */
 type PatchableMaterial = Material & {
   onBeforeCompile: (shader: { uniforms: Record<string, unknown>; fragmentShader: string }) => void;
+  __driAdjustHandle?: AdjustHandle;
 };
 
 /**
- * Install the display-space brightness/contrast shader on `material` (idempotent per
- * material). Returns a handle whose `set()` updates the live uniforms — no recompile.
- * Values are stashed until the shader compiles, so it is safe to `set()` immediately.
+ * Install the display-space brightness/contrast shader on `material`. Truly
+ * idempotent per material: a second call returns the same handle without patching
+ * again (a double patch would inject the GLSL header twice → duplicate uniforms →
+ * compile error). Returns a handle whose `set()` updates the live uniforms — no
+ * recompile. Values are stashed until the shader compiles, so `set()` is safe
+ * immediately.
+ *
+ * The patch string-replaces the standard `#include <common>` / `#include
+ * <map_fragment>` chunks, which only exist on standard PBR materials. On any other
+ * material the replace no-ops (adjust does nothing); in dev builds that emits a
+ * warning rather than failing silently.
  */
 export function installAdjustShader(material: Material): AdjustHandle {
+  const mat = material as PatchableMaterial;
+  if (mat.__driAdjustHandle) return mat.__driAdjustHandle;  // already patched
+
   const state = { b: 0, k: 0 };
   let uniforms: AdjustUniforms | null = null;
 
-  const mat = material as PatchableMaterial;
   const prev = mat.onBeforeCompile;
   mat.onBeforeCompile = (shader) => {
     prev?.call(mat, shader as never);
     shader.uniforms['uBrightness'] = { value: state.b };
     shader.uniforms['uContrast'] = { value: state.k };
+    const hadTokens = shader.fragmentShader.includes('#include <common>')
+      && shader.fragmentShader.includes('#include <map_fragment>');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${GLSL_HEADER}`)
       .replace('#include <map_fragment>', `#include <map_fragment>\n${GLSL_BODY}`);
+    const dev = (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+    if (dev && !hadTokens) {
+      console.warn(
+        '[dri-viewer] installAdjustShader: material has no <map_fragment>/<common> '
+          + 'chunk (non-PBR material?); brightness/contrast will have no effect',
+        (material as { type?: string }).type ?? material);
+    }
     uniforms = shader.uniforms as unknown as AdjustUniforms;
   };
   material.needsUpdate = true;
 
-  return {
+  const handle: AdjustHandle = {
     set(adjust: ImageAdjust): void {
       state.b = toFactor(adjust.brightness);
       state.k = toFactor(adjust.contrast);
@@ -114,4 +135,6 @@ export function installAdjustShader(material: Material): AdjustHandle {
       }
     },
   };
+  mat.__driAdjustHandle = handle;
+  return handle;
 }

@@ -59,7 +59,7 @@ back-catalog migration (Phase 2) feeds them arbitrary legacy objects.
       raking basis from the model extent or a manifest hint. (Scale already
       generalizes — near/far, light position, and marker sizing are all derived
       from the bounding sphere.)
-- [ ] Task 1.9: **Image-adjust shader robustness** (`viewer/src/image-adjust.ts`).
+- [x] Task 1.9: **Image-adjust shader robustness** (`viewer/src/image-adjust.ts`).
       `installAdjustShader` string-replaces `#include <map_fragment>` /
       `#include <common>`, which only exist on standard PBR materials (fine for the
       pipeline's current output). If a variant ever arrives with a different

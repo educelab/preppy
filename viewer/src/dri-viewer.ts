@@ -428,11 +428,11 @@ export class DriViewer extends HTMLElement {
     }
     void (async () => {
       for (const variant of manifest.variants) {
-        if (token !== this.#loadToken || !this.isConnected || this.#cache.has(variant.id)) {
-          if (token !== this.#loadToken || !this.isConnected) {
-            return;
-          }
-          continue;
+        if (token !== this.#loadToken || !this.isConnected) {
+          return;  // a newer load started or we were disconnected: abandon preload
+        }
+        if (this.#cache.has(variant.id)) {
+          continue;  // already resident
         }
         try {
           await this.#loadVariantModel(variant);
