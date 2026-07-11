@@ -86,8 +86,18 @@ function applyStyle(root: ShadowRoot): void {
   }
 }
 
+/**
+ * Cap on how many variants are *eagerly* preloaded after the default is shown, when
+ * the resident cache is unbounded (`maxCachedVariants === 0`). Keeps a many-variant
+ * object from fetching + GPU-uploading its entire set on load; variants past the
+ * ceiling load lazily on first selection. Tuned to the small back-catalog objects that
+ * ship today (≤4 variants) — revisit against the on-device many-variant pass.
+ */
+const DEFAULT_PRELOAD_CEILING = 8;
+
 export class DriViewer extends HTMLElement {
-  static readonly observedAttributes = ['manifest', 'variant', 'ui'] as const;
+  static readonly observedAttributes =
+    ['manifest', 'variant', 'ui', 'max-cached-variants'] as const;
 
   /** Container for the renderer canvas and any UI overlays. */
   readonly #stage: HTMLDivElement;
@@ -200,8 +210,11 @@ export class DriViewer extends HTMLElement {
 
   /**
    * Max number of variant models kept resident. 0 (default) keeps all variants cached
-   * for instant switching (a handful of 8K KTX2 variants coexist comfortably). Set a
-   * positive cap to LRU-evict when many large variants would otherwise exhaust memory.
+   * for instant switching (a handful of 8K KTX2 variants coexist comfortably); eager
+   * preload is still bounded to {@link DEFAULT_PRELOAD_CEILING} so a many-variant object
+   * doesn't load its whole set up front. Set a positive cap to LRU-evict when many large
+   * variants would otherwise exhaust memory (also the preload budget). Reflected by the
+   * `max-cached-variants` attribute for declarative use by embedding hosts.
    */
   get maxCachedVariants(): number {
     return this.#maxCached;
@@ -245,6 +258,11 @@ export class DriViewer extends HTMLElement {
     this.#measure.onChange(() =>
       this.#controls?.setHasMeasurement(this.#measure?.hasMeasurement ?? false),
     );
+    // Apply a declared cap before the first load/preload so it bounds them too.
+    const cap = this.getAttribute('max-cached-variants');
+    if (cap !== null) {
+      this.maxCachedVariants = Number(cap) || 0;
+    }
     void this.reload();
   }
 
@@ -282,6 +300,10 @@ export class DriViewer extends HTMLElement {
       if (this.#manifest) {
         this.#syncControls();
       }
+    } else if (name === 'max-cached-variants') {
+      // The setter clamps/floors and re-runs eviction. (A pre-connect write is
+      // ignored by the guard above; connectedCallback picks up the initial value.)
+      this.maxCachedVariants = Number(newValue ?? 0) || 0;
     }
   }
 
@@ -422,14 +444,20 @@ export class DriViewer extends HTMLElement {
   /** Preload the remaining variants into cache after the default is shown (idle-ish). */
   #preloadOthers(token: number): void {
     const manifest = this.#manifest;
-    // Only worth preloading when the cache is unbounded enough to hold them.
-    if (!manifest || (this.#maxCached > 0 && this.#maxCached < manifest.variants.length)) {
+    if (!manifest) {
       return;
     }
+    // Bound eager preload: an explicit resident cap, else DEFAULT_PRELOAD_CEILING, so a
+    // many-variant object doesn't fetch + GPU-upload its whole set up front. Variants
+    // past the budget load lazily on selection (#loadVariantModel).
+    const budget = this.#maxCached > 0 ? this.#maxCached : DEFAULT_PRELOAD_CEILING;
     void (async () => {
       for (const variant of manifest.variants) {
         if (token !== this.#loadToken || !this.isConnected) {
           return;  // a newer load started or we were disconnected: abandon preload
+        }
+        if (this.#cache.size >= budget) {
+          return;  // preload budget reached; the rest load on demand
         }
         if (this.#cache.has(variant.id)) {
           continue;  // already resident

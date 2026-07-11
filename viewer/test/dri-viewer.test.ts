@@ -64,6 +64,26 @@ describe('<dri-viewer> element skeleton', () => {
     el.remove();
   });
 
+  it('observes the max-cached-variants attribute', () => {
+    expect(DriViewer.observedAttributes).toContain('max-cached-variants');
+  });
+
+  it('clamps and floors the maxCachedVariants cap', () => {
+    const el = document.createElement('dri-viewer') as DriViewer;
+    el.maxCachedVariants = -3;
+    expect(el.maxCachedVariants).toBe(0); // negatives clamp to 0 (keep-all default)
+    el.maxCachedVariants = 2.9;
+    expect(el.maxCachedVariants).toBe(2); // floored
+    el.maxCachedVariants = 5;
+    expect(el.maxCachedVariants).toBe(5);
+  });
+
+  it('reports zero cached variants before any model loads', () => {
+    // (Real cap eviction + bounded preload need WebGL; covered in e2e/phase3.)
+    const el = document.createElement('dri-viewer') as DriViewer;
+    expect(el.cachedVariantCount).toBe(0);
+  });
+
   it('image adjust defaults to identity and is a no-op without an active variant', () => {
     const el = document.createElement('dri-viewer');
     document.body.append(el); // WebGL init fails under happy-dom → no variant is shown

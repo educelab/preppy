@@ -54,6 +54,7 @@ root.
 | `variant`         | `variant`       | Active variant `id`; empty ⇒ the manifest default. Changing it **switches variants, preserving the camera**. Reflected back for deep-linking. |
 | `ui`              | `ui`            | Space-separated UI tokens. Default shows the built-in controls; `ui="none"` hides all chrome (drive it yourself via events/methods). |
 | `transcoder-path` | —               | Override the Basis transcoder directory (default: `basis/` beside the bundle). Read once on connect. |
+| `max-cached-variants` | `maxCachedVariants` | Cap on resident variant models (`0` = keep all, the default). Set a positive cap to bound GPU memory on constrained devices for many-variant objects. |
 
 Additional JS-only members:
 
@@ -71,9 +72,18 @@ Additional JS-only members:
   and keyed by variant id: kept when toggling variants, cleared on a new manifest. Exposed
   in the UI as the ◑ Exposure panel; measurement overlays and the raking response are
   unaffected.
-- `maxCachedVariants: number` — cap resident variant models (0 = keep all, the default;
-  a handful of 8K variants coexist comfortably).
+- `maxCachedVariants: number` — cap resident variant models, also reflected by the
+  `max-cached-variants` attribute. See **Memory policy** below.
 - `getRenderStats()` / `getCameraState()` — diagnostics.
+
+**Memory policy.** By default (`maxCachedVariants === 0`) every variant stays resident so
+switching is instant — a handful of 8K KTX2 variants coexist comfortably, which is the
+back-catalog shape that ships today (≤4 variants). To keep a *many-variant* object from
+exhausting device memory, two bounds apply: eager preload after first paint is capped at a
+built-in ceiling (8) so the long tail loads lazily on selection instead of all at once; and
+a host embedding a known-large object on a constrained device can set `max-cached-variants`
+(attribute or property) to bound the resident set, LRU-evicting beyond the cap. The chosen
+ceiling is deliberate but provisional — confirm it against an on-device many-variant pass.
 
 The built-in chrome is a floating cluster of icon buttons in the **top-right** — Layers,
 Light (☀), Exposure (◑), Pan, Measure and Reset-view (⤢), plus a Clear button while a

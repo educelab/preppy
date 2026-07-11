@@ -89,6 +89,50 @@ test('variant switch preserves the camera exactly', async ({ page }) => {
   expect(pageErrors).toEqual([]);
 });
 
+test('a bounded max-cached-variants cap evicts LRU while cycling', async ({ page }) => {
+  const fixture = await page.request.get(MANIFEST);
+  test.skip(!fixture.ok(), 'sample assets not present in public/fixtures/');
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+
+  await gotoDefault(page);
+  const el = page.locator('dri-viewer');
+
+  // Bound the resident set to 2. The default (unbounded) may have preloaded all 4,
+  // so this also forces an immediate eviction down to the cap.
+  await el.evaluate((n) => n.setAttribute('max-cached-variants', '2'));
+
+  for (const id of VARIANTS) {
+    await el.evaluate((n, v) => n.setAttribute('variant', v), id);
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __variants: string[] }).__variants))
+      .toContain(id);
+    await expect
+      .poll(
+        () =>
+          el.evaluate(
+            (n) =>
+              (n as unknown as { getRenderStats(): { triangles: number } }).getRenderStats()
+                .triangles,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBeGreaterThan(0);
+    // Cache never exceeds the cap, and the active variant is always resident.
+    const count = await el.evaluate(
+      (n) => (n as unknown as { cachedVariantCount: number }).cachedVariantCount,
+    );
+    expect(count, `cachedVariantCount after ${id}`).toBeGreaterThan(0);
+    expect(count, `cachedVariantCount after ${id}`).toBeLessThanOrEqual(2);
+  }
+
+  const driErrors = await page.evaluate(
+    () => (window as unknown as { __errors: string[] }).__errors,
+  );
+  expect(driErrors).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
 test('all variants coexist without OOM or context loss', async ({ page }) => {
   const fixture = await page.request.get(MANIFEST);
   test.skip(!fixture.ok(), 'sample assets not present in public/fixtures/');
