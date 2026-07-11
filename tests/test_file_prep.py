@@ -59,6 +59,16 @@ def test_hash_inputs_includes_obj_mtls_textures(tmp_path):
     assert tmp_path / 't.png' in files
 
 
+def test_ktx2_mode_cli_default_is_etc1s():
+    # Task 1.2: lock the recorded default so it can't silently drift. The
+    # encode-side default is covered in tests/test_texture.py.
+    parser = file_prep._build_parser()
+    args = parser.parse_args(['-i', 'x.json'])
+    assert args.ktx2_mode == 'etc1s'
+    action = next(a for a in parser._actions if a.dest == 'ktx2_mode')
+    assert action.choices == ['etc1s', 'uastc']
+
+
 def _stub_opts(**over):
     base = dict(max_dim=8192, nodata_fill=None, target_error=0.2, validate=True,
                 deviation_budget=0.05, deviation_budget_frac=None,

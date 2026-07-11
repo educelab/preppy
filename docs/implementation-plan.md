@@ -242,7 +242,9 @@ See `spike/FINDINGS.md` for evidence. Go decision: **GO** on the pivot.
 1. **Decimation budget:** `gltfpack -si 0.2` (≈20%). d20–d50 look good; **d10 loses too
    much** detail for measurement. Hausdorff at 20% is ~0.01% of bbox — negligible.
 2. **KTX2 mode:** **ETC1S** (5.8 MB vs 53 MB UASTC; no visible quality difference on this
-   material). Revisit per-variant only if legibility needs it.
+   material) — the default `--ktx2-mode` (batch-wide). The spike's *per-variant* UASTC
+   override was **deferred** (Task 1.2): no shipping variant needs UASTC and the size cost
+   is ~9×. Promote to its own task if a hero/detail variant later needs it.
 3. Thumbnail source: unchanged (texture crop for now).
 4. **Normals:** **runtime `computeVertexNormals()`** in the viewer — computed vs baked were
    visually identical on these near-flat trays; no pipeline bake step needed.
