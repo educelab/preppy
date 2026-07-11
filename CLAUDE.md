@@ -69,4 +69,10 @@ out/
   tmp/                                # intermediates (deleted unless --keep-tmp)
 ```
 
-Hashed asset names are served `immutable`; `manifest.json`/`index.json` keep stable names and are revalidated. `--no-hash-names` gives stable asset names; `--prune` drops unreferenced hashed assets; `--uri` prefixes manifest URIs for absolute-URL hosts.
+Hashed asset names are served `immutable`; `manifest.json`/`index.json` keep stable names and are revalidated. `--no-hash-names` gives stable asset names; `--prune` drops unreferenced hashed assets (`--prune-keep N` retains the newest N prior generations per variant for rollover safety); `--uri` prefixes manifest URIs for absolute-URL hosts. Host cache-control reference: `docs/hosting/htaccess.example`.
+
+### Delivery conventions
+
+**Surface orientation (+Z):** a delivered glb's dominant imaged surface lies in the XY plane and faces **+Z**. The viewer's initial camera framing (looks down −Z) and raking-light basis (azimuth in XY, elevation toward +Z) assume this — all current back-catalog data are flat XY fragments, so it holds for every asset today. It is documented as a **precondition**, not enforced: an object whose front is not +Z must be pre-oriented in the pipeline before delivery. In the viewer the assumption has a single home — the `FRONT_AXIS` constant in `viewer/src/viewer.ts` (shared by `frameObject()` + `applyRakingLight()`, mirrored by `light-dial.ts`) — the one seam to replace if a future manifest orientation hint is added.
+
+**Normals:** the delivered glb carries good per-vertex normals — the pipeline bakes smooth normals from the un-quantized source only when the source lacks them (a source shipping `vn` is passed through; `--force-smooth-normals` overrides). See `bake_normals`/`obj_to_geometry_glb` in `geometry.py`.

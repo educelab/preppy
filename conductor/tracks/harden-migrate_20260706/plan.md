@@ -49,7 +49,7 @@ back-catalog migration (Phase 2) feeds them arbitrary legacy objects.
       (`int(...) - 1` on a negative index silently wraps under numpy). Add
       regression tests for a normal-bearing OBJ and a negative-index OBJ (current
       `test_bake_normals_*` only cover normalless inputs).
-- [ ] Task 1.8: **Viewer assumes the surface faces +Z** — `Viewer.applyRakingLight()`
+- [x] Task 1.8: **Viewer assumes the surface faces +Z** — `Viewer.applyRakingLight()`
       builds the light basis "relative to the surface (which faces +Z)" and
       `frameObject()` always parks the camera at `center + (0,0,radius*2.6)`.
       Correct for a flat fragment in XY; for an object whose front isn't +Z the

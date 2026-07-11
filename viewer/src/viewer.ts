@@ -28,6 +28,17 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
+/**
+ * DELIVERY CONVENTION: a delivered glb's dominant imaged surface lies in the XY plane
+ * and faces +Z (see CLAUDE.md "Delivery conventions"). Initial camera framing
+ * ({@link Viewer.frameObject}, looks down −Z) and the raking-light basis
+ * ({@link Viewer.applyRakingLight}, azimuth in XY / elevation toward +Z, mirrored by
+ * light-dial.ts) both assume it. This constant is that assumption's single home: an
+ * object whose front is not +Z must be pre-oriented in the pipeline, or a future
+ * manifest orientation hint would replace this (and derive a full raking basis) here.
+ */
+const FRONT_AXIS = new Vector3(0, 0, 1);
+
 export interface ViewerOptions {
   /**
    * Directory holding the Basis transcoder (`basis_transcoder.js` + `.wasm`). Defaults
@@ -134,8 +145,8 @@ export class Viewer {
   private applyRakingLight(): void {
     const az = MathUtils.degToRad(this.#rakingAzimuth);
     const el = MathUtils.degToRad(this.#rakingElevation);
-    // Direction the light comes FROM, relative to the surface (which faces +Z): azimuth
-    // sweeps in the XY plane, elevation lifts out of it toward the viewer.
+    // Direction the light comes FROM. Assumes the delivered +Z-facing surface convention
+    // (see FRONT_AXIS): azimuth sweeps the XY plane, elevation lifts out of it along +Z.
     const dir = new Vector3(
       Math.cos(el) * Math.cos(az),
       Math.cos(el) * Math.sin(az),
@@ -324,7 +335,10 @@ export class Viewer {
       return;
     }
     this.controls.target.copy(sphere.center);
-    this.camera.position.copy(sphere.center).add(new Vector3(0, 0, sphere.radius * 2.6));
+    // Park the camera in front of the surface along FRONT_AXIS (delivery convention).
+    this.camera.position
+      .copy(sphere.center)
+      .addScaledVector(FRONT_AXIS, sphere.radius * 2.6);
     this.camera.near = sphere.radius / 100;
     this.camera.far = sphere.radius * 100;
     this.camera.updateProjectionMatrix();
