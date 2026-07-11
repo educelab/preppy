@@ -37,7 +37,7 @@ These are places the pipeline + viewer were shaped to the one test object
 (`PHerc1428Cr04`, an MVS scroll fragment) and should be generalized before the
 back-catalog migration (Phase 2) feeds them arbitrary legacy objects.
 
-- [ ] Task 1.7: **`bake_normals` assumes the source OBJ carries no vertex
+- [x] Task 1.7: **`bake_normals` assumes the source OBJ carries no vertex
       normals** (`preppy/geometry.py`). It appends a fresh `vn` block and rewrites
       normalless faces as `v/vt/v` / `v//v` using *vertex index = normal index* —
       correct only when no `vn` lines pre-exist. A source that already ships

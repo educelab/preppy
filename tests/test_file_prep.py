@@ -73,7 +73,8 @@ def _stub_opts(**over):
     base = dict(max_dim=8192, nodata_fill=None, target_error=0.2, validate=True,
                 deviation_budget=0.05, deviation_budget_frac=None,
                 on_over_budget='fail', ktx2_mode='etc1s', hash_names=False,
-                tool_versions={}, uri='', smooth_normals=True)
+                tool_versions={}, uri='', smooth_normals=True,
+                force_smooth_normals=False)
     base.update(over)
     return SimpleNamespace(**base)
 

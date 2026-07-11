@@ -136,7 +136,8 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     #    them off the quantized grid.
     geom = geometry.obj_to_geometry_glb(
         obj_path, var_tmp / 'geom.glb', target_error=opts.target_error,
-        smooth_normals=opts.smooth_normals)
+        smooth_normals=opts.smooth_normals,
+        force_smooth_normals=opts.force_smooth_normals)
 
     # 3b. Optional Hausdorff gate on the decimation (opt-in; pymeshlab can't read
     #     the meshopt glb, so validate a plain re-pack at the same -si). Runs
@@ -174,7 +175,8 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     if opts.hash_names:
         config = {'target_error': opts.target_error, 'ktx2_mode': opts.ktx2_mode,
                   'max_dim': opts.max_dim, 'nodata_fill': nodata,
-                  'smooth_normals': opts.smooth_normals}
+                  'smooth_normals': opts.smooth_normals,
+                  'force_smooth_normals': opts.force_smooth_normals}
         digest = cache.content_hash(
             hash_inputs(obj_path, material_textures), config=config,
             tool_versions=opts.tool_versions)
@@ -312,6 +314,11 @@ def _build_parser() -> argparse.ArgumentParser:
                                'OBJ; the viewer computes normals off the quantized '
                                'grid instead (Phase 7 default: bake them)')
     geo_opts.set_defaults(smooth_normals=True)
+    geo_opts.add_argument('--force-smooth-normals', action='store_true',
+                          help='Rebake smooth normals even when the source OBJ '
+                               'already ships vertex normals (default: pass '
+                               'source normals through; only bake when absent). '
+                               'Use for a source with bad/faceted normals.')
     geo_opts.add_argument('--validate', action='store_true',
                           help='Hausdorff-validate each decimation (needs the '
                                'pymeshlab extra; adds a plain gltfpack pass)')

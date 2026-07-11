@@ -246,8 +246,13 @@ See `spike/FINDINGS.md` for evidence. Go decision: **GO** on the pivot.
    override was **deferred** (Task 1.2): no shipping variant needs UASTC and the size cost
    is ~9×. Promote to its own task if a hero/detail variant later needs it.
 3. Thumbnail source: unchanged (texture crop for now).
-4. **Normals:** **runtime `computeVertexNormals()`** in the viewer — computed vs baked were
-   visually identical on these near-flat trays; no pipeline bake step needed.
+4. **Normals:** the **pipeline bakes** area-weighted smooth normals from the un-quantized
+   source (Phase 7) — the spike's "runtime `computeVertexNormals()`" faceted on gltfpack's
+   quantized position grid once real delivery builds quantized positions. Policy (Task 1.7):
+   bake **only when the source lacks `vn`**; pass source normals through when present (they
+   are computed on pristine geometry and may encode creases). `--force-smooth-normals`
+   rebakes anyway; `--no-smooth-normals` defers to the viewer. The viewer's
+   `computeVertexNormals()` is now a fallback for normalless/legacy glbs only.
 5. **Variant alignment:** variants **do** share a frame — registration works once the glTF node
    transform is applied (see #8).
 
