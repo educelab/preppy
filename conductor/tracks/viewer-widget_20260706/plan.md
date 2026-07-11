@@ -3,7 +3,12 @@
 **Track ID:** viewer-widget_20260706
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-07-06
-**Status:** [ ] Not Started (revised 2026-07-07)
+**Status:** [~] Reopened 2026-07-10 for post-delivery feedback (Phases 5–12); Phases 1–4
+complete 2026-07-09. **Phases 5–12 all implemented + headless-verified 2026-07-10**.
+Phase 12 (floating controls + docked panels + puck-only light) is verified but
+**uncommitted** at the user's request (1Password SSH signing unavailable). Earlier phases'
+unsigned commits still need re-signing on review; Phase 12 awaits both commit + phase-gate
+approval.
 
 ## Overview
 Scaffold the TS/bundler/web-component skeleton, get one variant rendering, then
@@ -13,54 +18,302 @@ pipeline produces real assets. Each variant is its own self-contained glb.
 
 ## Phase 1: Scaffolding & stack (B1)
 ### Tasks
-- [ ] Task 1.1: TS project + bundler (Vite/esbuild) in `dri-voyager`; output one
+- [x] Task 1.1: TS project + bundler (Vite/esbuild) in `dri-voyager`; output one
       self-contained ESM/IIFE + transcoder wasm, no runtime CDN.
-- [ ] Task 1.2: `<dri-viewer>` custom-element skeleton with
+- [x] Task 1.2: `<dri-viewer>` custom-element skeleton with
       `manifest`/`variant`/`ui` attributes and a `variant-change` event (carrying
       the variant `id`); CSS sizing.
-- [ ] Task 1.3: Wire GLTFLoader + MeshoptDecoder + KTX2Loader + OrbitControls.
+- [x] Task 1.3: Wire GLTFLoader + MeshoptDecoder + KTX2Loader + OrbitControls.
 ### Verification
-- [ ] Empty widget mounts, sizes via CSS, and initializes the renderer.
+- [x] Empty widget mounts, sizes via CSS, and initializes the renderer.
+      (unit-tested in happy-dom; real-WebGL renderer init verified headless via
+      Playwright/Chromium — e2e/phase1.spec.ts.)
 
 ## Phase 2: Load & render one variant (B2, B3, B6 defaults)
 ### Tasks
-- [ ] Task 2.1: Fetch manifest (URL or inline); load the default variant's glb
+- [x] Task 2.1: Fetch manifest (URL or inline); load the default variant's glb
       (GLTFLoader handles embedded KTX2 + `KHR_texture_transform`); compute
       normals (`computeVertexNormals()`); apply the node transform to the mesh
       (real cm scale).
-- [ ] Task 2.2: Show the default variant; orbit/zoom/pan; frame on load.
-- [ ] Task 2.3: Default light rig (hemisphere ambient + directional key).
+- [x] Task 2.2: Show the default variant; orbit/zoom/pan; frame on load.
+- [x] Task 2.3: Default light rig (hemisphere ambient + directional key).
 ### Verification
-- [ ] A hand-authored `mvs` manifest renders correctly lit, camera framed, right
-      scale.
+- [x] A real per-object manifest (PHerc1428Cr04) renders correctly lit, camera
+      framed, texture coherent — verified headless (e2e/phase2.spec.ts) + screenshot.
 
 ## Phase 3: Camera-preserving variant switch (B4)
 ### Tasks
-- [ ] Task 3.1: Variant switch — load/show the target variant's glb, add to scene,
+- [x] Task 3.1: Variant switch — load/show the target variant's glb, add to scene,
       remove the previous; **never touch camera/controls**. Select by variant `id`.
-- [ ] Task 3.2: Memory/preload policy — cache loaded variant glbs; KTX2 stays GPU
+- [x] Task 3.2: Memory/preload policy — cache loaded variant glbs; KTX2 stays GPU
       compressed; optional LRU if many large variants; preload others after default.
-- [ ] Task 3.3: Automated check asserting camera state is identical across a switch.
+- [x] Task 3.3: Automated check asserting camera state is identical across a switch.
 ### Verification
-- [ ] Variant switch preserves the camera; several 8K KTX2 variants coexist
-      without OOM on a mid-range profile.
+- [x] Variant switch preserves the camera (numeric + visual, e2e/phase3.spec.ts);
+      all 4 real 8K KTX2 variants coexist resident without OOM / context loss.
 
 ## Phase 4: Measurement, raking light, embedding (B5, B6, B7)
 ### Tasks
-- [ ] Task 4.1: Two-point raycast measurement → distance in **cm**; line + label;
+- [x] Task 4.1: Two-point raycast measurement → distance in **cm**; line + label;
       optional scale bar.
-- [ ] Task 4.2: Raking-light azimuth/elevation control (good default).
-- [ ] Task 4.3: Packaging + embed docs; CORS/cache-header guidance (assets are
+- [x] Task 4.2: Raking-light azimuth/elevation control (good default).
+- [x] Task 4.3: Packaging + embed docs; CORS/cache-header guidance (assets are
       `immutable` when hashed; revalidate the manifest).
 ### Verification
-- [ ] Measurement matches a known dimension within tolerance; widget embeds with
-      one script + element on a test host page.
+- [x] Measurement returns a real cm distance (24.36 cm on PHerc1428Cr04, e2e); raking
+      slider drives light elevation; built-in controls render and ui="none" hides them.
+- [x] Built bundle embeds with one script + one element on a static host page
+      (e2e/embed.spec.ts); transcoder loads from sibling dist/basis/ (no CDN).
 
 ## Final Verification
-- [ ] All acceptance criteria met.
-- [ ] Camera-preservation and measurement checks passing.
-- [ ] Embed + asset-hosting docs written.
-- [ ] Ready for review.
+- [x] All acceptance criteria met (spec.md): scene loads + orbit/zoom/pan +
+      variant-change; camera-preserving switch; multiple 8K KTX2 variants without OOM;
+      two-point cm measurement; default lighting + raking control; one-script embed.
+- [x] Camera-preservation and measurement checks passing (e2e/phase3, phase4).
+- [x] Embed + asset-hosting docs written (README.md, examples/embed.html).
+- [x] Ready for review. Suites: typecheck clean, 19 unit + 8 e2e green.
+
+---
+
+# Post-delivery feedback (2026-07-10)
+
+Reopened after a live dev-server review. Each item below is a self-contained
+phase; findings are recorded inline so a phase can be picked up in fresh context
+without re-deriving. Dev host: `npm run dev` in `viewer/`, fixtures under
+`viewer/public/fixtures/` (NOT `dist/`); drive via
+`/?manifest=/fixtures/PHerc1428Cr04/manifest.json&variant=<id>`. Verify with the
+headless Playwright/SwiftShader harness (see `e2e/`).
+
+## Phase 5: Blank-render race + measurement UX (feedback #6, #7) — COMPLETE
+### Tasks
+- [x] Task 5.1: Fix blank render when `manifest` + `variant` are set in the same
+      tick (reload() invalidated #manifest; variant handler defers until a manifest
+      is loaded). Commit 813cac5.
+- [x] Task 5.2: Measurement persists after leaving measure mode; explicit "Clear"
+      button (shown only when a measurement exists); a 3rd pick still starts fresh.
+- [x] Task 5.3: Markers rescale per-frame to a constant ~5px on-screen radius
+      (was a fixed world radius that ballooned when zoomed in). Commit 7cd41ce.
+### Verification
+- [x] Headless: 2 picks → "24.78 cm"; persists + Clear works after disable;
+      markers stay small when zoomed. typecheck clean, 26 unit + phase1–4 e2e green.
+
+## Phase 6: Pan as a first-class tool (feedback #2) — COMPLETE
+### Tasks
+- [x] Task 6.1: Pan (hand) toggle in the controls, mutually exclusive with Measure.
+      Pan mode swaps OrbitControls left-drag to PAN
+      (`controls.mouseButtons.LEFT = MOUSE.PAN`), restoring ROTATE when off. Exposes
+      `setPanMode(on)`/`panning` on `<dri-viewer>` + `Viewer.setPanMode`. Right-drag
+      still pans in both modes.
+- [x] Task 6.2: Cursor affordance (grab/grabbing) via a `data-panning` stage attr,
+      mirroring the `data-measuring` crosshair.
+### Verification
+- [x] Headless: orbit mode targetΔ=0 (rotates); pan mode targetΔ=7.7 (pans); pan⇔
+      measure mutually exclusive. typecheck clean, 27 unit + 7 e2e green.
+
+## Phase 7: Smooth-shaded normals (feedback #4) — pipeline — COMPLETE
+Finding: geometry is well-indexed (404k verts / 729k tris) but ships **no
+normals**; the viewer runs `computeVertexNormals()`. gltfpack quantizes positions
+(`KHR_mesh_quantization`), so computing normals from the quantized grid amplifies
+into high-frequency normal jitter → jagged shading under raking light.
+### Tasks
+- [x] Task 7.1: Compute smooth vertex normals in the pipeline from the **un-quantized**
+      OBJ mesh (before gltfpack quantization) and bake them; let gltfpack octahedral-
+      quantize the normals (small size cost). Options: compute in a pre-pass and feed
+      gltfpack a normal-bearing mesh, or a gltf-transform normal pass. Reverses the
+      current "normals computed in the viewer" choice — update `geometry.py` docstring,
+      CLAUDE.md, and the viewer's `loadModel` (skip compute when normals present).
+- [x] Task 7.2: Regenerate the PHerc1428Cr04 fixture (all variants) → copy to
+      `viewer/public/fixtures/`.
+### Verification
+- [x] Delivered glb has a NORMAL attribute; viewer shows smooth shading under a
+      grazing raking light (headless screenshot before/after). Geometry byte size
+      delta noted. Verified: NORMAL (octahedral BYTE) on all 4 variants + TEXCOORD_0;
+      getRenderStats().hasNormals=true; ~+1 MB/variant; 9/9 e2e + 97/97 pipeline green;
+      user-confirmed smooth under grazing light in the running viewer (2026-07-10).
+
+## Phase 8: PGS nodataFill orange-fringe fix (feedback #1) — pipeline — COMPLETE
+Finding (confirmed w/ repro): PGS = `2_center.jpg`, a 32768² grayscale atlas with
+`nodataFill: #ff7f25` covering ~2/3 of the image. `normalize()` resizes to 8192
+**before** `fill_nodata()`, so the 4× downscale blends orange into UV-island edges;
+`fill_nodata` (fuzz 0.05) then back-fills the background *from those orange-tinted
+edge pixels*. Repro: 0% pure orange remains but ~30% is orange-tinted; bright
+orange fringes rim every island → orange specks on the surface.
+
+**Not a defect — PGS is meant to be grayscale.** Confirmed with the user: PGS
+(`2_center.jpg`) is a genuinely grayscale band that the upstream MVS pipeline
+re-encoded as 3-channel RGB (32768² sRGB). So the flat/grey appearance is correct
+data, not a pipeline washout — do NOT try to "restore color." Only the orange
+nodataFill fringes (Task 8.1) are the bug. (Optional future nicety: collapse such
+grayscale-as-RGB textures to single-channel before KTX2 to save size — out of scope
+here.)
+### Tasks
+- [x] Task 8.1: Make the downscale nodata-aware so orange never blends in: at full
+      res build the orange mask (cheap threshold), set masked pixels to alpha 0,
+      resize RGBA (alpha-weighted so orange contributes nothing), then fill the
+      still-transparent regions (nearest-valid, existing EDT) instead of matching a
+      color. Keep it off the gigapixel EDT path (the old full-res dilate hung).
+- [x] Task 8.2: Regenerate PGS variant → copy to fixtures. Trimmed pgs-only config
+      regen (hash inputs unchanged → same name `PHerc1428Cr04_pgs.890bf49a.glb`,
+      dropped over the fixture; manifest untouched).
+### Verification
+- [x] Residual orange-tinted fraction ≈ 0 at fuzz 0.10 on the normalized image;
+      no orange fringes on the surface. Verified on the real 32k PGS atlas: orange-
+      tinted fraction **0.0000%** at fuzz 0.10 (was ~15% mid-fix with a divide path,
+      ~30% before Phase 8); mask covers 73% (nodata) leaving 0% orange among opaque
+      chart pixels; background back-fill is neutral gray (unsampled by geometry).
+      Added 3 unit tests incl. an end-to-end synthetic-atlas normalize and a
+      partial-rim speckle regression test. Full suite 101/101 green. Refinement found
+      during 8.2 verification (rim-speckle from divide amplification) fixed in 8cdbdf1.
+
+## Phase 9: Popover primitive + Light panel — "light ball" (feedback #3) — viewer — COMPLETE
+Move the raking-light controls out of the inline bar into a popover behind a ☀
+"light-mode" icon button. **Interaction model confirmed with the user (2026-07-10
+grill):**
+- **Shaded-sphere dial** = a top-down view of the light hemisphere. **Drag sets
+  azimuth only** (pointer angle → azimuth). The puck rides at **radius =
+  cos(elevation)** — overhead (el 90°) → centre, grazing (el 0°) → rim — matching
+  the reference image and the existing `setRakingLight` semantics (el 90° =
+  straight-on, ~5° = grazing). The ball always shows the true light direction.
+- **Vertical elevation slider** (native `<input type=range>`) sets elevation AND
+  slides the puck radially. Elevation is NOT set by radial drag.
+- Dial is `role="slider"` (aria-valuemin 0 / valuemax 360 / valuenow = azimuth /
+  valuetext "NN°", aria-label "Light azimuth"); ←/↓ −5°, →/↑ +5°, Shift = 1°,
+  Home/End jump. Keep numeric az/el readouts.
+- **Reset** button → default az 45° / el 22° (double-click puck/slider also resets).
+- Keep `setRakingLight`/`getRakingLight`; add a `raking-change` CustomEvent so
+  `ui="none"` hosts can track state. Remove the inline Az/El sliders from the bar.
+
+Build a **reusable popover-button primitive** now (Light + Adjust use it this
+phase; Bands/Measure adopt it in Phase 11): icon button → anchored popover with
+focus management, Esc / click-outside dismiss, mutual exclusion (opening one
+closes the others), `aria-expanded`/`aria-haspopup`.
+### Tasks
+- [x] Task 9.1: Reusable popover-button primitive (focus mgmt, Esc/click-outside
+      dismiss, mutual exclusion, aria-expanded/haspopup) + unit tests.
+- [x] Task 9.2: Shaded-sphere azimuth dial (canvas or SVG in the shadow DOM):
+      drag → azimuth; puck radius = cos(elevation); `role=slider` keyboard model;
+      unit test for angle↔azimuth and elevation↔radius mapping.
+- [x] Task 9.3: Elevation slider + assemble the Light panel behind the ☀ button;
+      remove inline Az/El sliders; Reset button; wire `setRakingLight`/`getRakingLight`
+      + emit `raking-change`; keep `ui="none"` hiding it.
+- [x] Task 9.4: Reset-view button in the tool row → `resetView()` (reframes the
+      current model, reusing `Viewer.frameObject`).
+### Verification
+- [x] Headless: drag + arrow keys drive `getRakingLight` as expected; elevation
+      slider moves the puck radially; Reset returns to az 45°/el 22°; reset-view
+      reframes; popover a11y (focus/Esc); `ui="none"` hides both buttons. Unit tests
+      for popover + dial mappings green. Verified: typecheck clean, 49 unit
+      (12 controls + 8 popover + 10 dial) + phase1–4,7,9 e2e green (e2e/phase9.spec.ts,
+      6 tests). Mutual-exclusion covered by popover unit tests; the second built-in
+      popover (Adjust) arrives in Phase 10 for a full cross-popover e2e.
+
+## Phase 10: Image brightness/contrast adjust (feedback, 2026-07-10 grill) — viewer — COMPLETE
+Per-variant runtime brightness/contrast corrective for the visible base mesh (some
+textures differ in brightness). Behind a ◑ "tune" icon button, using the Phase 9
+popover primitive. **Design confirmed with the user:**
+- Applied via a **per-material `onBeforeCompile` shader on the base mesh albedo**,
+  in **display (sRGB) space**: `c=toSRGB(albedo); c=(c−0.5)*(1+k·contrast)+0.5;
+  c+=b·brightness; albedo=toLinear(c)`. Affects only the mesh texture — NOT the
+  raking-light response and NOT measurement overlays/markers.
+- Sliders run **−100…+100, 0 = exact identity** (image-editor style).
+- **Per-variant, in-memory, keyed by variant id**; restored when toggling variants;
+  cleared when a new manifest/object loads. Viewer-only (no manifest/pipeline
+  change) but the API is shaped to accept seeded per-variant defaults later.
+- **Reset** button → this variant's brightness/contrast to 0/0 (double-click resets).
+- API: `setImageAdjust({brightness,contrast})` / `getImageAdjust()` (current
+  variant), mirroring `setRakingLight`; emit an `image-adjust-change` CustomEvent;
+  `ui="none"` hides the panel. No new HTML attributes for transient state.
+### Tasks
+- [x] Task 10.1: Per-material albedo brightness/contrast shader (`onBeforeCompile`,
+      display-space, identity at 0) applied to base mesh material(s) only; unit test
+      the formula (identity at 0, monotonicity).
+- [x] Task 10.2: Per-variant in-memory state keyed by variant id — reapply on
+      variant switch, reset on new manifest; `setImageAdjust`/`getImageAdjust` +
+      `image-adjust-change`; `ui="none"` support.
+- [x] Task 10.3: Adjust panel behind the ◑ button (brightness + contrast sliders,
+      Reset) via the popover primitive.
+### Verification
+- [x] Headless pixel sampling: adjustments change the mesh albedo but leave
+      measurement overlays unchanged; per-variant values persist across switches and
+      reset on new manifest; Reset zeroes the current variant. Formula + state unit
+      tests green. Verified: typecheck clean, 62 unit (16 controls + 7 image-adjust +
+      formula/monotonicity + API contract) + e2e/phase10.spec.ts (6 tests: brightness
+      raises/lowers luminance via framebuffer readback, per-variant persist+restore,
+      new-manifest clears, panel slider + Reset, measurement value untouched, ui="none"
+      hides ◑ with API live). Added Viewer.samplePixel diagnostic for readback.
+
+## Phase 11: Responsive control panel (feedback #5) — viewer — COMPLETE
+_Design note: kept the band (layer) pickers **inline** rather than popover-izing them —
+the docked mode is meant to surface them, and hiding the primary layer switch behind a
+tap works against feedback #5. Converted **Pan/Measure/Clear** into a "Tools" popover so
+the rest of the bar is uniformly icon-buttons + popovers. Docking uses a `@container`
+query on the widget's own width (not the page's)._
+Below a width breakpoint, dock the panel to the bottom showing only the band
+(layer) pickers; tuck the rest behind popover buttons. Now that Phase 9 provides a
+reusable popover primitive, convert Bands and Measure/Pan to it too so the whole
+bar is icon-buttons + popovers.
+### Tasks
+- [x] Task 11.1: Container-query layout in `styles.ts` (`@container (max-width: 460px)`
+      docks the bar to the bottom edge); a compact docked mode + an expand toggle (⋯)
+      in `controls.ts`.
+- [x] Task 11.2: Convert Measure/Pan (+Clear) to a "Tools" popover; band pickers kept
+      inline (design note above); ensure the measure hint/label, Light + Adjust panels,
+      and reset-view all work docked.
+### Verification
+- [x] Headless at wide + narrow viewports; controls reachable in both; no horizontal
+      overflow; popovers open/dismiss correctly when docked. Verified: typecheck clean,
+      66 unit (16 controls incl. Tools popover + expand toggle) + e2e/phase11.spec.ts
+      (3 tests: wide inline / no toggle, narrow docked bar geometry + bands reachable,
+      expand reveals + popover open/Esc/collapse). Full e2e green per-spec
+      (phase1–4,7,9,10,11 + embed against the built bundle). Caught + fixed a stray
+      backtick in a styles.ts CSS comment that closed the template literal early.
+
+## Phase 12: Floating controls + docked panels + puck-only light (feedback, 2026-07-10) — viewer
+Live-review feedback reshapes the whole control chrome from one bottom-left glass bar
+(inline bands + anchored popovers, Phase 9–11) into **floating icon buttons top-right that
+toggle panels docked at fixed screen locations**. **Decisions confirmed with the user
+(2026-07-10):**
+- **Raking light = puck only.** Remove the vertical elevation slider; the shaded-sphere
+  dial's puck now sets **both** azimuth (pointer angle) and elevation (pointer radius —
+  centre = overhead/el 90°, rim = grazing/el 0°, matching `radius = R·cos(el)`). Keyboard:
+  ←/→ azimuth, ↑/↓ elevation (±5°, Shift ±1°); Home/End azimuth ends; double-click resets.
+- **Floating top-right button cluster** (individual buttons, no glass bar): Layers, Light
+  (☀), Exposure (◑), Pan, Measure, Reset-view (⤢), and a contextual Clear (shown only while
+  a measurement is drawn). Pan/Measure stay mode toggles; Reset-view is an action.
+- **New Layers button** (inline Google-Material *layers* SVG icon — no web font/CDN) toggles
+  the bands/layers panel.
+- **Panels dock at fixed locations, toggled independently (not modals, no mutual exclusion,
+  no click-outside/focus-trap):** bands → **bottom-left** (open on load — primary control);
+  Light + Exposure → **bottom-right**, stacked when both open. A button's `aria-pressed`
+  reflects its panel's open state.
+- Retires the Phase 9 anchored-popover primitive for the built-in chrome (delete `popover.ts`
+  + its test) and the Phase 11 container-query bottom-bar + ⋯ expand toggle + Tools popover.
+  Keep all public API (`setRakingLight`/`getRakingLight`/`raking-change`,
+  `setImageAdjust`/…, `ui="none"`); no attribute/pipeline changes.
+### Tasks
+- [x] Task 12.1: Light dial puck sets azimuth AND elevation (radial drag → elevation; ↑/↓
+      keyboard); added `radiusToElevation`; dropped the elevation slider from the Light panel;
+      unit-tested the radius↔elevation mapping and keyboard.
+- [x] Task 12.2: Rebuilt `controls.ts` as a floating top-right button cluster + fixed docked
+      panels (bands bottom-left open-by-default; Light/Exposure bottom-right stacked);
+      independent toggle semantics (new `PanelToggle`, no mutual exclusion); Layers button +
+      inline Material layers SVG; Pan/Measure/Clear/Reset-view as floating icon buttons;
+      removed popover/expand/Tools scaffolding; reworked `styles.ts` for a pointer-transparent
+      overlay + toolbar + docks (retained dial/band/adjust/measure-label styling). Deleted
+      `popover.ts` + `popover.test.ts`.
+- [x] Task 12.3: Updated the affected tests to the new model — `test/controls.test.ts`,
+      `test/light-dial.test.ts`, and e2e `phase4`/`phase9`/`phase10`/`phase11`.
+### Verification
+- [x] Headless (SwiftShader) at wide + narrow widths: floating buttons reachable, no
+      horizontal overflow; toggling a button shows/hides its docked panel at the right
+      location; Light + Exposure coexist stacked bottom-right; bands open on load bottom-left;
+      dial drag (`dragging the puck sets both azimuth and elevation`) + keyboard drive
+      `getRakingLight` (az + el) and emit `raking-change`; Reset restores az 45°/el 22°;
+      Reset-view reframes; `ui="none"` hides all buttons/panels. Verified: typecheck clean,
+      **57 unit** (17 controls + 12 light-dial + …) + **26 e2e** green single-worker
+      (phase3's two texture-residency tests flake only under parallel SwiftShader GPU-memory
+      pressure — pass in isolation and single-worker; unrelated to this UI change).
+      **Not committed** — 1Password SSH signing unavailable in this context (user directive).
 
 ---
 

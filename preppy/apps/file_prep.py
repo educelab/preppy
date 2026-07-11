@@ -5,8 +5,9 @@ geometry grouping — ADR-0002 amended), run the validated chain:
 
 1. Resolve the variant's texture(s) transitively from its OBJ's ``map_Kd``
    (``obj_helpers.parse_material_textures``) — one or many (multi-chart UV).
-2. Normalize each texture to 8-bit sRGB PNG (dilating over ``nodataFill`` when
-   resolved) and encode it to KTX2 (``texture``).
+2. Normalize each texture to 8-bit sRGB PNG (masking + back-filling the
+   ``nodataFill`` color when resolved, so it never bleeds into chart edges) and
+   encode it to KTX2 (``texture``).
 3. gltfpack the OBJ to decimated, meshopt-compressed geometry (``geometry``).
 4. Embed every KTX2 into the geometry glb **by material name** -> one
    self-contained variant glb (``assemble``).
@@ -129,9 +130,13 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
         ktx2_by_material[name] = texture.encode_ktx2(
             png, dst=var_tmp / f'{name}.ktx2', mode=opts.ktx2_mode)
 
-    # 3. gltfpack -> decimated meshopt geometry glb (UVs kept "used").
+    # 3. gltfpack -> decimated meshopt geometry glb (UVs kept "used"). Smooth
+    #    vertex normals are baked from the un-quantized OBJ first (Phase 7) so the
+    #    glb ships a NORMAL attribute instead of leaving the viewer to compute
+    #    them off the quantized grid.
     geom = geometry.obj_to_geometry_glb(
-        obj_path, var_tmp / 'geom.glb', target_error=opts.target_error)
+        obj_path, var_tmp / 'geom.glb', target_error=opts.target_error,
+        smooth_normals=opts.smooth_normals)
 
     # 3b. Optional Hausdorff gate on the decimation (opt-in; pymeshlab can't read
     #     the meshopt glb, so validate a plain re-pack at the same -si). Runs
@@ -158,7 +163,8 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     digest = None
     if opts.hash_names:
         config = {'target_error': opts.target_error, 'ktx2_mode': opts.ktx2_mode,
-                  'max_dim': opts.max_dim, 'nodata_fill': nodata}
+                  'max_dim': opts.max_dim, 'nodata_fill': nodata,
+                  'smooth_normals': opts.smooth_normals}
         digest = cache.content_hash(
             hash_inputs(obj_path, material_textures), config=config,
             tool_versions=opts.tool_versions)
@@ -290,6 +296,12 @@ def _build_parser() -> argparse.ArgumentParser:
                                f'(default: {DEFAULT_TARGET_ERROR})')
     geo_opts.add_argument('--no-decimate', action='store_true',
                           help='Meshopt-compress without simplifying (skip -si)')
+    geo_opts.add_argument('--no-smooth-normals', dest='smooth_normals',
+                          action='store_false',
+                          help='Skip baking smooth vertex normals from the source '
+                               'OBJ; the viewer computes normals off the quantized '
+                               'grid instead (Phase 7 default: bake them)')
+    geo_opts.set_defaults(smooth_normals=True)
     geo_opts.add_argument('--validate', action='store_true',
                           help='Hausdorff-validate each decimation (needs the '
                                'pymeshlab extra; adds a plain gltfpack pass)')
