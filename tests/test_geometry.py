@@ -52,6 +52,53 @@ def test_geometry_cmd_no_decimate_omits_si():
     assert '-cc' in cmd          # still meshopt-compressed
 
 
+def test_bake_normals_flat_quad(tmp_path):
+    # Two CCW triangles in the z=0 plane -> every vertex normal is +z.
+    obj = tmp_path / 'm.obj'
+    obj.write_text(
+        'mtllib m.mtl\n'
+        'v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n'
+        'vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\n'
+        'usemtl mat\n'
+        'f 1/1 2/2 3/3\n'
+        'f 1/1 3/3 4/4\n')
+    out = geometry.bake_normals(obj, tmp_path / 'm.normals.obj')
+    text = out.read_text()
+
+    # One vn per vertex, all pointing +z.
+    assert text.count('vn 0.000000 0.000000 1.000000\n') == 4
+    # Faces reference each corner's own vertex normal (v/vt -> v/vt/v).
+    assert 'f 1/1/1 2/2/2 3/3/3\n' in text
+    assert 'f 1/1/1 3/3/3 4/4/4\n' in text
+    # vt data and usemtl binding are preserved.
+    assert 'vt 1 1\n' in text
+    assert 'usemtl mat\n' in text
+    # The vn block is emitted before the first face that uses it.
+    assert text.index('vn ') < text.index('f ')
+
+
+def test_bake_normals_bare_faces_and_mtl_copy(tmp_path):
+    src = tmp_path / 'src'
+    src.mkdir()
+    (src / 'm.mtl').write_text('newmtl mat\nmap_Kd tex.tif\n')
+    obj = src / 'm.obj'
+    obj.write_text(
+        'mtllib m.mtl\n'
+        'v 0 0 0\nv 1 0 0\nv 0 1 0\n'
+        'f 1 2 3\n')  # bare v faces (no vt)
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    out = geometry.bake_normals(obj, out_dir / 'm.normals.obj')
+    text = out.read_text()
+
+    assert 'f 1//1 2//2 3//3\n' in text  # bare v -> v//v
+    # mtllib is a bare basename (gltfpack rejects absolute mtllib paths)...
+    mtllib = next(l for l in text.splitlines() if l.startswith('mtllib '))
+    assert mtllib == 'mtllib m.mtl'
+    # ...and the .mtl is copied next to the baked OBJ so it resolves relatively.
+    assert (out_dir / 'm.mtl').read_text() == 'newmtl mat\nmap_Kd tex.tif\n'
+
+
 def test_hausdorff_result_budget():
     r = HausdorffResult(max_distance=0.03, mean=0.001, rms=0.002,
                         bbox_diagonal=3.0, budget=0.05)

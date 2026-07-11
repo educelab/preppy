@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>&lt;dri-viewer&gt; embed example</title>
+  <style>
+    html, body { margin: 0; background: #0f1013; color: #ddd;
+                 font: 15px/1.6 system-ui, sans-serif; }
+    main { max-width: 900px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 20px; font-weight: 600; }
+    p { color: #aaa; }
+    /* The host sizes the widget; it fills whatever box you give it. */
+    dri-viewer { display: block; width: 100%; height: 540px; border-radius: 12px; }
+    #log { margin-top: 16px; font: 13px/1.5 ui-monospace, monospace; color: #8fb; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>P.Herc. 1428 — &lt;dri-viewer&gt; embed</h1>
+    <p>Two tags: one module script and one element. No bundler, no runtime CDN.</p>
+
+    <!-- 1) Load the self-contained bundle (ships dist/basis/ alongside it). -->
+    <script type="module" src="/dist/dri-viewer.js"></script>
+
+    <!-- 2) Drop in the element pointing at an object manifest. -->
+    <dri-viewer
+      manifest="/public/fixtures/PHerc1428Cr04/manifest.json"
+      variant="rgb"></dri-viewer>
+
+    <div id="log">Waiting for the scene…</div>
+  </main>
+
+  <script>
+    // Host pages can react to the widget's events.
+    const viewer = document.querySelector('dri-viewer');
+    const log = document.getElementById('log');
+    viewer.addEventListener('variant-change', (e) => {
+      log.textContent = `variant-change → ${e.detail.id}`;
+    });
+    viewer.addEventListener('measure', (e) => {
+      log.textContent = `measure → ${e.detail.distance.toFixed(2)} ${e.detail.unit}`;
+    });
+    viewer.addEventListener('error', (e) => {
+      log.textContent = `error → ${e.detail.error}`;
+    });
+  </script>
+</body>
+</html>
