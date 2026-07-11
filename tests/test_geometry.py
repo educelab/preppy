@@ -113,6 +113,35 @@ def test_hausdorff_result_budget():
     assert r3.max_fraction_of_diagonal is None  # no diagonal
 
 
+def test_hausdorff_result_frac_budget():
+    # Fractional budget compares max_distance/bbox_diagonal against budget_frac.
+    r = HausdorffResult(max_distance=0.03, mean=0.001, rms=0.002,
+                        bbox_diagonal=3.0, budget_frac=0.02)  # 1% <= 2%
+    assert r.within_frac_budget is True
+    assert r.over_budget is False
+
+    r2 = HausdorffResult(max_distance=0.09, mean=0.01, rms=0.02,
+                         bbox_diagonal=3.0, budget_frac=0.02)  # 3% > 2%
+    assert r2.within_frac_budget is False
+    assert r2.over_budget is True
+
+    r3 = HausdorffResult(max_distance=0.09, mean=0.01, rms=0.02,
+                         budget_frac=0.02)      # no diagonal -> unknown
+    assert r3.within_frac_budget is None
+    assert r3.over_budget is False
+
+    # over_budget OR's the two budgets: within absolute but over fractional.
+    r4 = HausdorffResult(max_distance=0.09, mean=0.01, rms=0.02,
+                         bbox_diagonal=3.0, budget=1.0, budget_frac=0.02)
+    assert r4.within_budget is True
+    assert r4.within_frac_budget is False
+    assert r4.over_budget is True
+
+    # neither budget set -> report-only, never over budget.
+    r5 = HausdorffResult(max_distance=99.0, mean=1.0, rms=1.0, bbox_diagonal=3.0)
+    assert r5.over_budget is False
+
+
 def test_validate_rejects_meshopt_glb(monkeypatch, tmp_path):
     # Guard converts a would-be pymeshlab segfault into a clear error.
     monkeypatch.setattr(geometry, 'is_meshopt_glb', lambda p: True)

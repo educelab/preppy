@@ -147,3 +147,25 @@ def test_pipeline_validate_gate_runs(sample):
     man = json.loads((out_dir / 'MVS' / 'manifest.json').read_text())
     for v in man['variants']:
         assert (out_dir / 'MVS' / v['uri']).is_file()
+
+
+# The synthetic sample is two flat quads, so gltfpack's -si is lossless
+# (Hausdorff ~= 0) and no non-negative budget can be exceeded. An impossible
+# negative budget deterministically forces the over-budget branch, exercising
+# the gate's action end-to-end through main() on real tools.
+def test_pipeline_validate_gate_warns(sample):
+    pytest.importorskip('pymeshlab')
+    config_path, out_dir = sample
+    _run(config_path, out_dir, '--validate', '--deviation-budget', '-1',
+         '--on-over-budget', 'warn')  # over budget, but warn -> run completes
+    man = json.loads((out_dir / 'MVS' / 'manifest.json').read_text())
+    for v in man['variants']:
+        assert (out_dir / 'MVS' / v['uri']).is_file()
+
+
+def test_pipeline_validate_gate_fails(sample):
+    pytest.importorskip('pymeshlab')
+    config_path, out_dir = sample
+    # Default --on-over-budget fail: the gate aborts the whole run.
+    with pytest.raises(RuntimeError, match='exceeds'):
+        _run(config_path, out_dir, '--validate', '--deviation-budget', '-1')

@@ -290,6 +290,7 @@ class HausdorffResult:
     rms: float
     bbox_diagonal: Optional[float] = None
     budget: Optional[float] = None
+    budget_frac: Optional[float] = None
 
     @property
     def within_budget(self) -> Optional[bool]:
@@ -303,16 +304,38 @@ class HausdorffResult:
             return None
         return self.max_distance / self.bbox_diagonal
 
+    @property
+    def within_frac_budget(self) -> Optional[bool]:
+        """Whether the deviation stays under ``budget_frac`` (a fraction of the
+        bbox diagonal). ``None`` when no fractional budget is set or the diagonal
+        is unknown."""
+        if self.budget_frac is None:
+            return None
+        frac = self.max_fraction_of_diagonal
+        if frac is None:
+            return None
+        return frac <= self.budget_frac
+
+    @property
+    def over_budget(self) -> bool:
+        """True when either budget (absolute or fractional) is set and exceeded.
+        False when no budget is set (report-only)."""
+        return self.within_budget is False or self.within_frac_budget is False
+
 
 def validate(original: PathLike, decimated: PathLike, *,
-             budget: Optional[float] = None, samplenum: int = 100000,
+             budget: Optional[float] = None, budget_frac: Optional[float] = None,
+             samplenum: int = 100000,
              symmetric: bool = True) -> HausdorffResult:
     """Hausdorff-check the ``decimated`` mesh against the ``original``.
 
     Both must be pymeshlab-readable (OBJ/PLY/STL or a **plain** glb — not a
     meshopt-compressed one, which crashes pymeshlab). Returns a
-    :class:`HausdorffResult`; when ``budget`` is given, ``within_budget`` reports
-    whether the max deviation stays under it.
+    :class:`HausdorffResult`; when ``budget`` (absolute mesh units) or
+    ``budget_frac`` (a fraction of the bbox diagonal, scale-independent) is
+    given, ``within_budget`` / ``within_frac_budget`` report whether the max
+    deviation stays under each, and ``over_budget`` is True if either is
+    exceeded.
 
     Requires the optional ``pymeshlab`` dependency (``pip install .[validate]``).
     """
@@ -351,4 +374,5 @@ def validate(original: PathLike, decimated: PathLike, *,
 
     return HausdorffResult(
         max_distance=max_d, mean=mean_d, rms=rms_d,
-        bbox_diagonal=res.get('diag_mesh_0'), budget=budget)
+        bbox_diagonal=res.get('diag_mesh_0'), budget=budget,
+        budget_frac=budget_frac)

@@ -149,15 +149,25 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
         # on any it can't decode (incl. the placeholder an untextured material
         # leaves as image[0]). Validation is geometry-only, so drop them.
         geometry.strip_textures(plain)
-        res = geometry.validate(obj_path, plain, budget=opts.deviation_budget)
+        res = geometry.validate(obj_path, plain, budget=opts.deviation_budget,
+                                budget_frac=opts.deviation_budget_frac)
         detail = f'max={res.max_distance:.4g}'
         if res.max_fraction_of_diagonal is not None:
             detail += f' ({res.max_fraction_of_diagonal * 100:.3g}% of bbox)'
-        if res.within_budget is False:
-            raise RuntimeError(
-                f'variant {suffix!r}: decimation deviation {detail} exceeds '
-                f'--deviation-budget {opts.deviation_budget}')
-        log.info('  validated %s: Hausdorff %s', suffix, detail)
+        if res.over_budget:
+            budgets = []
+            if res.within_budget is False:
+                budgets.append(f'--deviation-budget {opts.deviation_budget}')
+            if res.within_frac_budget is False:
+                budgets.append(
+                    f'--deviation-budget-frac {opts.deviation_budget_frac}')
+            msg = (f'variant {suffix!r}: decimation deviation {detail} exceeds '
+                   f'{" / ".join(budgets)}')
+            if opts.on_over_budget == 'fail':
+                raise RuntimeError(msg)
+            log.warning('  %s (continuing; --on-over-budget warn)', msg)
+        else:
+            log.info('  validated %s: Hausdorff %s', suffix, detail)
 
     # 4. Name the output asset (content hash over inputs+config, never output).
     digest = None
@@ -307,8 +317,22 @@ def _build_parser() -> argparse.ArgumentParser:
                                'pymeshlab extra; adds a plain gltfpack pass)')
     geo_opts.add_argument('--deviation-budget', type=float, default=None,
                           metavar='FLOAT',
-                          help='Max allowed Hausdorff deviation in mesh units; '
-                               'over budget fails the run (report-only if unset)')
+                          help='Max allowed Hausdorff deviation in mesh units '
+                               "(OR'd with --deviation-budget-frac); over budget "
+                               'fails the run subject to --on-over-budget '
+                               '(report-only if unset)')
+    geo_opts.add_argument('--deviation-budget-frac', type=float, default=None,
+                          metavar='FRAC',
+                          help='Max allowed Hausdorff deviation as a fraction of '
+                               'the mesh bbox diagonal — scale-independent, so it '
+                               'ports across the arbitrary-scale objects a '
+                               "migration feeds the pipeline. OR'd with "
+                               '--deviation-budget (report-only if both unset)')
+    geo_opts.add_argument('--on-over-budget', choices=['fail', 'warn'],
+                          default='fail',
+                          help='Action when a variant exceeds the deviation '
+                               "budget: 'fail' aborts the run, 'warn' logs and "
+                               'continues (default: fail)')
 
     out_opts = parser.add_argument_group('output options')
     out_opts.add_argument('--hash-names', default=True,

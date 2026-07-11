@@ -13,7 +13,7 @@ this track *enforces/records* them.
 
 ## Phase 1: Harden (Phase 4)
 ### Tasks
-- [ ] Task 1.1: Enforce the decimation budget (spike: `-si 0.2`) as a Hausdorff
+- [x] Task 1.1: Enforce the decimation budget (spike: `-si 0.2`) as a Hausdorff
       gate in the pipeline (fail/warn on over-budget).
 - [ ] Task 1.2: Confirm + record KTX2 mode (spike: ETC1S default, per-variant
       UASTC option) as the default `--ktx2-mode`.
