@@ -4,7 +4,15 @@ gltfpack, plus optional Hausdorff validation of the decimation.
 - :func:`obj_to_geometry_glb` — runs ``gltfpack`` with error-bounded
   simplification (``-si``) and meshopt compression (``-cc``). Textures are left
   referenced so gltfpack keeps UVs "used" (Phase 0 rule — dropping them corrupts
-  the atlas). **Normals are not baked**; the viewer computes them.
+  the atlas). With ``smooth_normals`` (the delivery default) it first bakes
+  per-vertex smooth normals into a temp OBJ via :func:`bake_normals` and packs
+  *that*, so the delivered glb carries a NORMAL attribute.
+- :func:`bake_normals` — the smooth-normal pre-pass (Phase 7). Computes
+  area-weighted vertex normals from the **un-quantized** source OBJ and writes a
+  normal-bearing copy; gltfpack then octahedral-quantizes them (``-vn 8``).
+  Computing normals *before* gltfpack quantizes positions
+  (``KHR_mesh_quantization``) avoids the high-frequency shading jitter that
+  ``computeVertexNormals`` on the quantized grid produced in the viewer.
 - :func:`validate` — samples the Hausdorff distance between the original and the
   decimated mesh with pymeshlab and checks it against a deviation budget.
 
@@ -17,6 +25,7 @@ image it can't decode, so run a plain glb through :func:`strip_textures` first
 """
 
 import json
+import shutil
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,7 +53,9 @@ def obj_to_geometry_glb_cmd(obj: Path, out: Path,
     - ``-noq`` — disable vertex quantization when ``quantize`` is False (also
       needed for a pymeshlab-readable validation mesh).
 
-    Normals are never generated here; the viewer computes them.
+    This builder does not touch normals: with ``smooth_normals`` the caller
+    :func:`obj_to_geometry_glb` feeds gltfpack an already normal-bearing OBJ
+    (see :func:`bake_normals`), which gltfpack octahedral-quantizes by default.
     """
     cmd: List[str] = [tools.TOOLS['gltfpack'].executable,
                       '-i', str(obj), '-o', str(out)]
@@ -62,15 +73,116 @@ def obj_to_geometry_glb_cmd(obj: Path, out: Path,
 def obj_to_geometry_glb(obj: PathLike, out: PathLike, *,
                         target_error: Optional[float] = DEFAULT_TARGET_ERROR,
                         meshopt: bool = True, quantize: bool = True,
+                        smooth_normals: bool = False,
                         extra: Optional[List[str]] = None) -> Path:
-    """Run gltfpack to produce the decimated geometry glb; return its path."""
+    """Run gltfpack to produce the decimated geometry glb; return its path.
+
+    With ``smooth_normals`` the source OBJ is first run through
+    :func:`bake_normals` (a normal-bearing copy in ``out``'s directory) and
+    gltfpack packs that copy, so the delivered glb carries a NORMAL attribute.
+    Leave it off for the plain validation re-pack — Hausdorff is geometry-only
+    and baking would just cost time.
+    """
     tools.require('gltfpack')
     obj, out = Path(obj), Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    cmd = obj_to_geometry_glb_cmd(obj, out, target_error=target_error,
+    src = obj
+    if smooth_normals:
+        src = bake_normals(obj, out.with_name(out.stem + '.normals.obj'))
+    cmd = obj_to_geometry_glb_cmd(src, out, target_error=target_error,
                                   meshopt=meshopt, quantize=quantize, extra=extra)
     tools.run(cmd)
     return out
+
+
+def bake_normals(obj_in: PathLike, obj_out: PathLike) -> Path:
+    """Write a copy of ``obj_in`` with per-vertex smooth normals, return its path.
+
+    Computes area-weighted vertex normals from the source positions (before any
+    gltfpack quantization) and emits a ``vn`` block plus face refs that point
+    each corner's normal at its own vertex (``v/vt`` → ``v/vt/v``, bare ``v`` →
+    ``v//v``). Everything else — ``usemtl`` bindings, ``v``/``vt`` data, face
+    topology — is copied through untouched so gltfpack still resolves the same
+    materials and keeps the UVs "used".
+
+    Each referenced ``.mtl`` is **copied next to the output OBJ** and ``mtllib``
+    is rewritten to its bare basename. gltfpack cannot load an *absolute*
+    ``mtllib`` path — it reports "materials could not be loaded" and then prunes
+    the now-unused UVs — so the material must sit beside the OBJ under a relative
+    name. The material's ``map_Kd`` image need not resolve: gltfpack keeps the
+    material (and the UVs) even when it can't decode the texture, exactly as it
+    does for the undecodable source TIFFs. Polygons are fan-triangulated for the
+    area weighting only; the written faces keep their original arity (gltfpack
+    triangulates). Faces that already carry a normal index are left as-is.
+    """
+    import numpy as np
+
+    obj_in, obj_out = Path(obj_in), Path(obj_out)
+    src_dir = obj_in.parent
+    lines = obj_in.read_text().splitlines()
+
+    positions: List[tuple] = []
+    tri: List[tuple] = []  # 0-based vertex-index triples, for normal accumulation
+    for line in lines:
+        if line.startswith('v '):
+            p = line.split()
+            positions.append((float(p[1]), float(p[2]), float(p[3])))
+        elif line.startswith('f '):
+            corners = [int(t.split('/', 1)[0]) - 1 for t in line.split()[1:]]
+            for i in range(1, len(corners) - 1):  # fan-triangulate
+                tri.append((corners[0], corners[i], corners[i + 1]))
+
+    pos = np.asarray(positions, dtype=np.float64)
+    faces = np.asarray(tri, dtype=np.int64)
+    # Un-normalized cross product == 2*area*unit_normal, so summing it per vertex
+    # is area-weighted by construction.
+    fn = np.cross(pos[faces[:, 1]] - pos[faces[:, 0]],
+                  pos[faces[:, 2]] - pos[faces[:, 0]])
+    vn = np.zeros_like(pos)
+    for k in range(3):
+        np.add.at(vn, faces[:, k], fn)
+    lens = np.linalg.norm(vn, axis=1, keepdims=True)
+    lens[lens == 0] = 1.0  # isolated/degenerate vertices -> leave a zero normal
+    vn /= lens
+
+    with obj_out.open('w') as out:
+        wrote_normals = False
+        for line in lines:
+            if line.startswith('f '):
+                if not wrote_normals:  # emit the vn block just before first use
+                    for x, y, z in vn:
+                        out.write(f'vn {x:.6f} {y:.6f} {z:.6f}\n')
+                    wrote_normals = True
+                out.write(_face_with_normals(line))
+            elif line.startswith('mtllib '):
+                libs = line.split()[1:]
+                for lib in libs:  # copy each .mtl next to the baked OBJ
+                    src_mtl = (src_dir / lib)
+                    if src_mtl.is_file():
+                        shutil.copy(src_mtl, obj_out.parent / Path(lib).name)
+                out.write('mtllib ' + ' '.join(
+                    Path(lib).name for lib in libs) + '\n')
+            else:
+                out.write(line + '\n')
+    return obj_out
+
+
+def _face_with_normals(line: str) -> str:
+    """Rewrite an OBJ ``f`` line so each corner references its own vertex normal.
+
+    ``v/vt`` → ``v/vt/v``; bare ``v`` → ``v//v``. A corner that already carries a
+    normal index (two slashes) is left untouched.
+    """
+    out = ['f']
+    for ref in line.split()[1:]:
+        fields = ref.split('/')
+        if len(fields) >= 3 and fields[2]:
+            out.append(ref)
+        elif len(fields) == 1:
+            out.append(f'{ref}//{ref}')
+        else:  # v/vt (or v/ ) -> append normal index == vertex index
+            out.append(f'{fields[0]}/{fields[1]}/{fields[0]}')
+    return ' '.join(out) + '\n'
 
 
 def _glb_json(path: Path) -> Optional[dict]:
