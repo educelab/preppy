@@ -94,6 +94,13 @@ export class Viewer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
+    // Accessibility: the canvas is a labeled image, reachable in the tab order.
+    // (Keyboard camera navigation is deferred; the chrome — variants/light/exposure —
+    // is already keyboard-operable via its buttons/dial/sliders.)
+    const canvas = this.renderer.domElement;
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', '3D model');
+    canvas.tabIndex = 0;
 
     this.scene = new Scene();
     this.scene.background = new Color(0x15171c);
@@ -326,6 +333,11 @@ export class Viewer {
   /** Release GPU resources for a model that was loaded but never shown (stale load). */
   disposeModel(root: Object3D): void {
     disposeObject(root);
+  }
+
+  /** Set the canvas's accessible name (e.g. object title + active variant). */
+  setAccessibleName(name: string): void {
+    this.renderer.domElement.setAttribute('aria-label', name);
   }
 
   /** Frame the camera + controls target on `obj`'s bounding sphere (initial load). */

@@ -212,6 +212,43 @@ describe('Controls', () => {
     expect(host.adjusted).toHaveLength(0); // reflection only, no host round-trip
   });
 
+  it('panel toggles expose aria-expanded and aria-controls', () => {
+    new Controls(mount, makeHost());
+    const layers = mount.querySelector<HTMLButtonElement>('.tbtn.layers')!;
+    const light = mount.querySelector<HTMLButtonElement>('.tbtn.light')!;
+    expect(layers.getAttribute('aria-expanded')).toBe('true'); // bands open on load
+    expect(light.getAttribute('aria-expanded')).toBe('false');
+    // aria-controls resolves to the corresponding panel.
+    expect(layers.getAttribute('aria-controls')).toBe('dri-panel-layers');
+    expect(mount.querySelector(`#${layers.getAttribute('aria-controls')}`)).toBe(
+      mount.querySelector('.bands-panel'),
+    );
+    light.click();
+    expect(light.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('labels the Light and Exposure panels as groups', () => {
+    new Controls(mount, makeHost());
+    for (const cls of ['.light-panel', '.adjust-panel']) {
+      const panel = mount.querySelector<HTMLDivElement>(cls)!;
+      expect(panel.getAttribute('role')).toBe('group');
+      const title = mount.querySelector(`#${panel.getAttribute('aria-labelledby')}`);
+      expect(title?.textContent).toBeTruthy();
+    }
+  });
+
+  it('associates each exposure slider with its output and voices signed values', () => {
+    new Controls(mount, makeHost({ imageAdjust: { brightness: 20, contrast: 0 } }));
+    const sliders = mount.querySelectorAll<HTMLInputElement>('.adjust-panel input[type="range"]');
+    const outputs = mount.querySelectorAll<HTMLOutputElement>('.adjust-panel output');
+    expect(sliders[0]!.id).toBeTruthy();
+    expect(outputs[0]!.getAttribute('for')).toBe(sliders[0]!.id); // native association
+    expect(sliders[0]!.getAttribute('aria-valuetext')).toBe('+20'); // seeded, signed
+    sliders[0]!.value = '-30';
+    sliders[0]!.dispatchEvent(new Event('input'));
+    expect(sliders[0]!.getAttribute('aria-valuetext')).toBe('-30');
+  });
+
   it('removes its DOM on dispose', () => {
     const controls = new Controls(mount, makeHost());
     expect(mount.querySelector('.ui')).not.toBeNull();

@@ -73,6 +73,39 @@ test('renders built-in controls and measures a real cm distance', async ({ page 
   await el.screenshot({ path: 'test-results/phase4-measure.png' });
 });
 
+test('accessibility: labeled canvas that tracks the variant, and a live measurement', async ({
+  page,
+}) => {
+  const fixture = await page.request.get(MANIFEST);
+  test.skip(!fixture.ok(), 'sample assets not present in public/fixtures/');
+
+  await loadDefault(page);
+  const el = page.locator('dri-viewer');
+  const canvas = page.locator('dri-viewer canvas[role="img"]'); // the render canvas
+
+  // Host is a labeled 3D-viewer group; the canvas carries a name for the active variant.
+  await expect(el).toHaveAttribute('role', 'group');
+  await expect(el).toHaveAttribute('aria-roledescription', '3D artifact viewer');
+  const rgbLabel = (await canvas.getAttribute('aria-label')) ?? '';
+  expect(rgbLabel.toLowerCase()).toContain('rgb');
+
+  // Switching variants updates the accessible name.
+  await el.evaluate((n) => n.setAttribute('variant', 'ir1050'));
+  await expect(canvas).not.toHaveAttribute('aria-label', rgbLabel);
+  expect(((await canvas.getAttribute('aria-label')) ?? '').toLowerCase()).toContain('ir');
+
+  // A completed measurement is announced via an aria-live status region.
+  await page.locator('dri-viewer .tbtn.measure').click();
+  const box = (await el.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.42, box.y + box.height * 0.5);
+  await page.mouse.click(box.x + box.width * 0.6, box.y + box.height * 0.55);
+  const label = page.locator('dri-viewer .measure-label');
+  await expect(label).toBeVisible();
+  await expect(label).toHaveAttribute('role', 'status');
+  await expect(label).toHaveAttribute('aria-live', 'polite');
+  await expect(label).toContainText('cm');
+});
+
 test('the light dial drives the raking-light elevation (puck only, no slider)', async ({
   page,
 }) => {

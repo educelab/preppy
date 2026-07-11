@@ -8,8 +8,9 @@
 //
 // The buttons are plain TOGGLES, not modals: a panel opens/closes at its dock and is
 // otherwise persistent (no click-outside dismissal, no focus trap, no mutual exclusion —
-// Light and Exposure can sit stacked together). A button's `aria-pressed` mirrors its
-// panel's open state; Pan/Measure mirror their mode instead.
+// Light and Exposure can sit stacked together). Panel toggles are disclosures —
+// `aria-expanded` + `aria-controls` point at the panel they show (and mirror it on
+// `aria-pressed` too); Pan/Measure mirror their mode via `aria-pressed` instead.
 //
 // Shown by default (ui !== "none"); a host that wants its own chrome sets ui="none" and
 // drives the element via attributes/methods/events instead. The panel is decoupled from
@@ -20,6 +21,12 @@ import type { ImageAdjust } from './image-adjust';
 
 /** Raking-light default when the Light panel is reset (matches Viewer's initial rig). */
 const RAKING_DEFAULT = { azimuth: 45, elevation: 22 };
+
+/** Format a slider value with an explicit sign for screen readers (+20 / -10 / 0). */
+function signed(value: number): string {
+  const n = Math.round(value);
+  return n > 0 ? `+${n}` : String(n);
+}
 
 /** Inline monochrome SVG icons (no web font / CDN). `currentColor` inherits button ink. */
 const ICONS: Record<string, string> = {
@@ -83,6 +90,9 @@ class PanelToggle {
     readonly button: HTMLButtonElement,
     readonly panel: HTMLElement,
   ) {
+    if (panel.id) {
+      button.setAttribute('aria-controls', panel.id);
+    }
     button.addEventListener('click', () => this.setOpen(!this.#open));
   }
   get open(): boolean {
@@ -91,6 +101,7 @@ class PanelToggle {
   setOpen(on: boolean): void {
     this.#open = on;
     this.panel.hidden = !on;
+    this.button.setAttribute('aria-expanded', String(on)); // disclosure semantics
     this.button.setAttribute('aria-pressed', String(on));
   }
 }
@@ -220,6 +231,7 @@ export class Controls {
   private buildBandsPanel(): HTMLDivElement {
     const panel = document.createElement('div');
     panel.className = 'panel bands-panel';
+    panel.id = 'dri-panel-layers';
     const bands = document.createElement('div');
     bands.className = 'bands';
     bands.setAttribute('role', 'group');
@@ -242,12 +254,16 @@ export class Controls {
   private buildLightPanel(): HTMLDivElement {
     const panel = document.createElement('div');
     panel.className = 'panel light-panel';
+    panel.id = 'dri-panel-light';
     panel.hidden = true;
+    panel.setAttribute('role', 'group');
+    panel.setAttribute('aria-labelledby', 'dri-panel-light-title');
 
     const head = document.createElement('div');
     head.className = 'panel-head';
     const title = document.createElement('span');
     title.className = 'panel-title';
+    title.id = 'dri-panel-light-title';
     title.textContent = 'Raking light';
     const reset = document.createElement('button');
     reset.type = 'button';
@@ -309,12 +325,16 @@ export class Controls {
   private buildAdjustPanel(): HTMLDivElement {
     const panel = document.createElement('div');
     panel.className = 'panel adjust-panel';
+    panel.id = 'dri-panel-exposure';
     panel.hidden = true;
+    panel.setAttribute('role', 'group');
+    panel.setAttribute('aria-labelledby', 'dri-panel-exposure-title');
 
     const head = document.createElement('div');
     head.className = 'panel-head';
     const title = document.createElement('span');
     title.className = 'panel-title';
+    title.id = 'dri-panel-exposure-title';
     title.textContent = 'Exposure';
     const reset = document.createElement('button');
     reset.type = 'button';
@@ -355,10 +375,16 @@ export class Controls {
     input.min = '-100';
     input.max = '100';
     input.value = String(Math.round(value));
+    input.id = `dri-adjust-${name.toLowerCase()}`;
     input.setAttribute('aria-label', name);
+    input.setAttribute('aria-valuetext', signed(value));  // voice signed values (+20 / −10)
     const output = document.createElement('output');
+    output.setAttribute('for', input.id);                 // native output↔input association
     output.textContent = String(Math.round(value));
-    input.addEventListener('input', () => this.#applyAdjust());
+    input.addEventListener('input', () => {
+      input.setAttribute('aria-valuetext', signed(Number(input.value)));
+      this.#applyAdjust();
+    });
     row.append(tag, input, output);
     return { row, input, output };
   }

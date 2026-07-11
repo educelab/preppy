@@ -64,6 +64,15 @@ describe('<dri-viewer> element skeleton', () => {
     el.remove();
   });
 
+  it('exposes a labeled 3D-viewer group role once connected', () => {
+    const el = document.createElement('dri-viewer');
+    document.body.append(el); // connectedCallback sets host a11y attrs (before WebGL init)
+    expect(el.getAttribute('role')).toBe('group');
+    expect(el.getAttribute('aria-roledescription')).toBe('3D artifact viewer');
+    expect(el.getAttribute('aria-label')).toBeTruthy();
+    el.remove();
+  });
+
   it('observes the max-cached-variants attribute', () => {
     expect(DriViewer.observedAttributes).toContain('max-cached-variants');
   });

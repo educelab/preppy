@@ -244,6 +244,13 @@ export class DriViewer extends HTMLElement {
     if (this.#viewer) {
       return;
     }
+    // Accessibility: name the widget as a labeled 3D-viewer group (set here, not in the
+    // constructor, per the custom-element spec). Applies even if WebGL init fails below.
+    this.setAttribute('role', 'group');
+    this.setAttribute('aria-roledescription', '3D artifact viewer');
+    if (!this.hasAttribute('aria-label')) {
+      this.setAttribute('aria-label', '3D artifact viewer');
+    }
     try {
       const transcoderPath = this.getAttribute('transcoder-path') ?? undefined;
       this.#viewer = new Viewer(this.#stage, { transcoderPath });
@@ -387,6 +394,10 @@ export class DriViewer extends HTMLElement {
       return; // superseded — the model stays cached for a later switch
     }
     viewer.setModel(model, { frame });
+    // Keep the canvas's accessible name in sync with the shown object + variant.
+    viewer.setAccessibleName(
+      `${manifest.title ?? manifest.id} — ${variant.label ?? variant.id}`,
+    );
     this.#activeVariantId = variant.id;
     this.#controls?.setActiveVariant(variant.id);
     // Reflect this variant's stored brightness/contrast into the Adjust panel.

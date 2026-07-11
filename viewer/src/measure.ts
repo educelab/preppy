@@ -64,10 +64,16 @@ export class MeasureTool {
     this.#label = document.createElement('div');
     this.#label.className = 'measure-label';
     this.#label.hidden = true;
+    // Announce the completed measurement to assistive tech (polite live region).
+    this.#label.setAttribute('role', 'status');
+    this.#label.setAttribute('aria-live', 'polite');
+    this.#label.setAttribute('aria-atomic', 'true');
 
     this.#hint = document.createElement('div');
     this.#hint.className = 'measure-hint';
     this.#hint.hidden = true;
+    this.#hint.setAttribute('role', 'status');
+    this.#hint.setAttribute('aria-live', 'polite');
     this.#hint.textContent = 'Click two points to measure';
 
     container.append(this.#hint, this.#label);

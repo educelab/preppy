@@ -26,7 +26,7 @@ this track *enforces/records* them.
 - [x] Task 1.4: Cache-busting retention policy (keep-last-N via `--prune`) + host
       `Cache-Control` example (`.htaccess`: revalidate manifest, `immutable`
       hashed assets) once the target host is known.
-- [ ] Task 1.5: Accessibility basics on the widget (keyboard, focus, labels).
+- [x] Task 1.5: Accessibility basics on the widget (keyboard, focus, labels).
 - [ ] Task 1.6: Docs — README, `ktx`(≥v5)/`gltfpack`/`gltf-transform` install;
       rework `.gitlab-ci.yml` for the new toolchain (keep the `-h` smoke test).
       Also wire the **viewer** typecheck/unit(vitest)/e2e(Playwright) into CI
