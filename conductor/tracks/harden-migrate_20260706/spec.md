@@ -40,8 +40,13 @@ spike (see `spike/FINDINGS.md`): `-si 0.2` decimation, ETC1S default, units cm.
 - [ ] Docs updated: README, install of `ktx`(≥v5)/`gltfpack`/`gltf-transform`, CI
       reworked for the new toolchain (including the viewer typecheck/unit/e2e
       suites, deferred out of viewer-widget).
-- [ ] Existing back-catalog objects re-emitted as single-variant manifests and
-      served by the new widget; old Voyager path can be retired.
+- [ ] ~~Existing back-catalog objects re-emitted as single-variant manifests and
+      served by the new widget; old Voyager path can be retired.~~ **Rescoped
+      2026-07-11:** the pipeline emits the new format, but performing the migration
+      and standing it up on the host is owned by the **DRI Viewer application**
+      team, not this track. This track instead delivers a consumption/migration
+      handoff that documents the new format + how to embed `<dri-viewer>` in place
+      of DPO Voyager; it now lives with the widget in the `dri-voyager` repo.
 
 ## Risk Assessment
 - Legacy objects may use formats/quirks the new pipeline hasn't seen — migrate in

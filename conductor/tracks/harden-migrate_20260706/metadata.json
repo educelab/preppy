@@ -4,10 +4,11 @@
   "type": "chore",
   "status": "in_progress",
   "created": "2026-07-06T18:56:11Z",
-  "updated": "2026-07-11T12:00:00Z",
-  "current_phase": 2,
-  "current_task": "2.1",
+  "updated": "2026-07-11T14:00:00Z",
+  "current_phase": 3,
+  "current_task": "3.1",
   "depends_on": ["delivery-pipeline_20260706", "viewer-widget_20260706"],
-  "phases": { "total": 3, "completed": 1 },
-  "tasks": { "total": 14, "completed": 9 }
+  "phases": { "total": 3, "completed": 2 },
+  "tasks": { "total": 11, "completed": 10 },
+  "notes": "Phase 2 rescoped 2026-07-11: back-catalog migration + host stand-up moved to the DRI Viewer app; Phase 2 deliverable was the consumption handoff, now maintained with the widget in the dri-voyager repo (the <dri-viewer> viewer was migrated out of this repo). Only the optional Phase 3 LOD stretch remains."
 }

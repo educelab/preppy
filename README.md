@@ -139,9 +139,9 @@ or an offscreen-GL backend **skip cleanly** when those are absent, so a bare run
 covers the pure logic. CI runs this across Python 3.11–3.13 (plus a manual `integration`
 job that exercises the full toolchain); see `.gitlab-ci.yml`.
 
-The `<dri-viewer>` web component in [`viewer/`](viewer/) has its own suite — TypeScript
-typecheck, Vitest units, and Playwright e2e — wired into CI alongside the Python jobs.
-See [`viewer/README.md`](viewer/README.md#development).
+> The `<dri-viewer>` web component that consumes this pipeline's output lives in a
+> separate repository (`dri-voyager`), with its own TypeScript/Vitest/Playwright
+> suite. This repo is the model-preparation pipeline only.
 
 ### Legacy path (deprecated)
 

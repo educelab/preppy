@@ -82,16 +82,29 @@ host-specific `Cache-Control` tuning once the host is known (1.4); provisioning
 e2e fixtures on CI so the WebGL specs run there (1.6); keyboard camera navigation
 as its own follow-up (1.5)._
 
-## Phase 2: Migrate back-catalog (Phase 5)
+## Phase 2: Consumption handoff (rescoped 2026-07-11 — was: Migrate back-catalog)
+**Rescope note.** The back-catalog migration and host stand-up are **not** done in
+this repo. The pipeline already emits the new format (manifest + per-variant glb +
+thumbnail); *consuming* it — re-emitting/serving objects and swapping the DPO
+Voyager embed for `<dri-viewer>` — is owned by the **DRI Viewer application** team.
+This phase's deliverable is the handoff document that lets them do it. The original
+migrate/host/retire tasks move out of scope for this track (see below).
 ### Tasks
-- [ ] Task 2.1: Author input configs for existing objects (single-variant
-      manifest).
-- [ ] Task 2.2: Batch-run the pipeline; spot-check each migrated object in the
-      widget.
-- [ ] Task 2.3: Stand up the migrated catalog on the host; verify embeds.
-- [ ] Task 2.4: Retire the old Voyager path once the migrated catalog is verified.
+- [x] Task 2.1: Produce the consumption/migration handoff for the DRI Viewer repo
+      — why Voyager was dropped, old→new concept map, `manifest.json`/`index.json`
+      schema, how to obtain + embed the widget, the full widget API, hosting/CORS +
+      cache headers, the +Z delivery precondition, and a migration checklist.
+      Authored here, then relocated to the `dri-voyager` repo alongside the widget
+      when the viewer was migrated out of this repo.
+### Out of scope (ownership moved to the DRI Viewer app / pipeline operators)
+- Author input configs for existing objects (single-variant manifests).
+- Batch-run the pipeline; spot-check each migrated object in the widget.
+- Stand up the migrated catalog on the host; verify embeds.
+- Retire the old Voyager path once the migrated catalog is verified live.
 ### Verification
-- [ ] Migrated objects render correctly in the widget; no broken embeds.
+- [x] Handoff guide delivered; accuracy cross-checked against the pipeline's
+      delivery format (`preppy/manifest.py` + ADR-0001/0002) at authoring time.
+      Now maintained with the widget in the `dri-voyager` repo.
 
 ## Phase 3: Two-tier LOD (stretch, optional)
 ### Tasks
@@ -101,10 +114,12 @@ as its own follow-up (1.5)._
 - [ ] First-paint improves measurably without harming measurement accuracy.
 
 ## Final Verification
-- [ ] All success criteria met.
-- [ ] Back-catalog migrated and verified live.
+- [ ] All (in-scope) success criteria met.
+- [x] ~~Back-catalog migrated and verified live~~ — rescoped 2026-07-11: migration
+      + host stand-up moved to the DRI Viewer app; replaced by the consumption
+      handoff (Phase 2), which now lives with the widget in the `dri-voyager` repo.
 - [ ] Tuning parameters recorded in `docs/implementation-plan.md`.
-- [ ] Ready for review.
+- [ ] Ready for review. (Only the optional Phase 3 LOD stretch remains open.)
 
 ---
 
