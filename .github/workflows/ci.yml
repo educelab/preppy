@@ -15,14 +15,21 @@ jobs:
   # ===========================================================================
   # Python package (preppy/)
   # ---------------------------------------------------------------------------
-  # The pure-Python logic is covered here across supported interpreters. Tests
-  # that need the external toolchain (magick/ktx/gltfpack/node), pymeshlab, or an
-  # offscreen-GL backend self-skip when those are absent, so a bare runner still
-  # gets full logic coverage plus the historic `preppy -h` smoke test.
+  # Runs the suite across supported interpreters. ImageMagick + the `preview`
+  # extra (trimesh/pyrender, with OSMesa for offscreen GL) are installed so the
+  # texture-normalization and rendered-thumbnail paths actually execute and
+  # catch regressions here rather than self-skipping. The heavier geometry
+  # toolchain (ktx/gltfpack/node) and pymeshlab remain the manual `integration`
+  # job's job; those tests still self-skip here. The tool-availability skips are
+  # for bare local-dev machines, not CI.
   # ===========================================================================
   test:
     name: py ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    env:
+      # Headless offscreen GL backend so the pyrender model-preview tests run
+      # instead of skipping on a missing GL context.
+      PYOPENGL_PLATFORM: osmesa
     strategy:
       fail-fast: false
       matrix:
@@ -35,10 +42,15 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install system deps (ImageMagick + offscreen GL)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick libosmesa6 libgl1
+
       - name: Install
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install '.[test]'
+          pip install '.[test,preview]'
 
       - name: Run tests
         run: python -m pytest tests/
