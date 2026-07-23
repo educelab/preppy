@@ -3,7 +3,7 @@
 **Track ID:** harden-migrate_20260706
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-07-06
-**Status:** [ ] Not Started (revised 2026-07-07)
+**Status:** [x] Complete (closed 2026-07-23)
 
 ## Overview
 Harden first (enforce tuning gates, memory, cache-busting policy, a11y, docs, CI),
@@ -106,20 +106,27 @@ migrate/host/retire tasks move out of scope for this track (see below).
       delivery format (`preppy/manifest.py` + ADR-0001/0002) at authoring time.
       Now maintained with the widget in the `dri-voyager` repo.
 
-## Phase 3: Two-tier LOD (stretch, optional)
+## Phase 3: Two-tier LOD (stretch, optional) — descoped 2026-07-23
+**Descope note.** This stretch was always viewer-side work — Task 3.1 explicitly
+"wire the viewer swap." The `<dri-viewer>` widget was migrated out to the
+`dri-voyager` repo, so any preview-mesh/background-load swap is now owned there,
+not in this pipeline repo. First-paint on the current back-catalog (flat XY
+fragments) was acceptable without it, so the stretch was never triggered.
 ### Tasks
-- [ ] Task 3.1: Only if first-paint still hurts — add a preview mesh + background
-      full-res load; wire the viewer swap.
+- [x] ~~Task 3.1: preview mesh + background full-res load; wire the viewer swap~~
+      — descoped: viewer-owned, moved to `dri-voyager`; first-paint acceptable.
 ### Verification
-- [ ] First-paint improves measurably without harming measurement accuracy.
+- [x] ~~First-paint improves measurably~~ — N/A; LOD not needed and now viewer-owned.
 
 ## Final Verification
-- [ ] All (in-scope) success criteria met.
+- [x] All (in-scope) success criteria met.
 - [x] ~~Back-catalog migrated and verified live~~ — rescoped 2026-07-11: migration
       + host stand-up moved to the DRI Viewer app; replaced by the consumption
       handoff (Phase 2), which now lives with the widget in the `dri-voyager` repo.
-- [ ] Tuning parameters recorded in `docs/implementation-plan.md`.
-- [ ] Ready for review. (Only the optional Phase 3 LOD stretch remains open.)
+- [x] Tuning parameters recorded in `docs/implementation-plan.md` (see "Tuning
+      parameters — resolved by the Phase 0 spike").
+- [x] Ready for review. Track closed 2026-07-23 — viewer migrated to `dri-voyager`;
+      only the optional viewer-side LOD stretch remained and it moved with the widget.
 
 ---
 

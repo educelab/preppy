@@ -2,13 +2,13 @@
   "id": "harden-migrate_20260706",
   "title": "Harden & migrate",
   "type": "chore",
-  "status": "in_progress",
+  "status": "complete",
   "created": "2026-07-06T18:56:11Z",
-  "updated": "2026-07-11T14:00:00Z",
+  "updated": "2026-07-23T00:00:00Z",
   "current_phase": 3,
-  "current_task": "3.1",
+  "current_task": "final-verification",
   "depends_on": ["delivery-pipeline_20260706", "viewer-widget_20260706"],
-  "phases": { "total": 3, "completed": 2 },
-  "tasks": { "total": 11, "completed": 10 },
-  "notes": "Phase 2 rescoped 2026-07-11: back-catalog migration + host stand-up moved to the DRI Viewer app; Phase 2 deliverable was the consumption handoff, now maintained with the widget in the dri-voyager repo (the <dri-viewer> viewer was migrated out of this repo). Only the optional Phase 3 LOD stretch remains."
+  "phases": { "total": 3, "completed": 3 },
+  "tasks": { "total": 11, "completed": 11 },
+  "notes": "Closed 2026-07-23. Phase 2 rescoped 2026-07-11: back-catalog migration + host stand-up moved to the DRI Viewer app; the consumption handoff is now maintained with the widget in the dri-voyager repo (the <dri-viewer> viewer was migrated out of this repo). Phase 3 (two-tier LOD) descoped: it was viewer-side work ('wire the viewer swap') that moved with the widget to dri-voyager, and first-paint was acceptable without it."
 }
