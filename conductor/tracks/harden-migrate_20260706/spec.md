@@ -27,10 +27,26 @@ spike (see `spike/FINDINGS.md`): `-si 0.2` decimation, ETC1S default, units cm.
       example (`.htaccess` once the target host is known: revalidate the manifest,
       long-cache hashed assets).
 - [ ] Basic accessibility pass on the widget.
+- [ ] **Generalization hardening (from viewer-widget MR !8 review):** the pipeline
+      + viewer no longer assume the one test object's shape before the migration
+      feeds them arbitrary legacy objects —
+      (a) `bake_normals` handles source OBJs that already carry vertex normals and
+      negative face indices (not just the normalless MVS OBJs);
+      (b) the viewer's +Z surface-orientation assumption (raking-light basis +
+      default framing) is either removed or documented as a delivery precondition;
+      (c) the image-adjust shader warns instead of silently no-op'ing on a
+      non-PBR material, and the caching/preload memory default is a deliberate,
+      documented choice for many-variant objects.
 - [ ] Docs updated: README, install of `ktx`(≥v5)/`gltfpack`/`gltf-transform`, CI
-      reworked for the new toolchain.
-- [ ] Existing back-catalog objects re-emitted as single-variant manifests and
-      served by the new widget; old Voyager path can be retired.
+      reworked for the new toolchain (including the viewer typecheck/unit/e2e
+      suites, deferred out of viewer-widget).
+- [ ] ~~Existing back-catalog objects re-emitted as single-variant manifests and
+      served by the new widget; old Voyager path can be retired.~~ **Rescoped
+      2026-07-11:** the pipeline emits the new format, but performing the migration
+      and standing it up on the host is owned by the **DRI Viewer application**
+      team, not this track. This track instead delivers a consumption/migration
+      handoff that documents the new format + how to embed `<dri-viewer>` in place
+      of DPO Voyager; it now lives with the widget in the `dri-voyager` repo.
 
 ## Risk Assessment
 - Legacy objects may use formats/quirks the new pipeline hasn't seen — migrate in

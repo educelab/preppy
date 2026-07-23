@@ -1,14 +1,15 @@
 # Tech Stack
 
-Two components: the **pipeline** (Python + external CLIs) and the **viewer**
-(three.js web component). Versions are open to upgrade — treat the numbers below
-as the intended modern floor, not the current `setup.cfg` values.
+This repo is the **model-preparation pipeline** (Python + external CLIs). The
+`<dri-viewer>` web component that consumes its output lives in the separate
+`dri-voyager` repo (see **Repos** below). Versions are open to upgrade — treat the
+numbers below as the intended modern floor, not the current `setup.cfg` values.
 
 ## Languages
 - **Python 3.11+** for the pipeline. (Upgrading from the current `>=3.9` floor;
   the Singularity image already targets 3.11.)
-- **TypeScript** for the viewer widget.
-- **HTML/CSS** for the widget's minimal chrome.
+- **JavaScript (Node)** for the bundled `@gltf-transform/core` KTX2-embed helper
+  (`preppy/node/embed.mjs`).
 
 ## Pipeline
 
@@ -39,17 +40,18 @@ Deps may be bumped freely to current releases.
 - **Retired**: `obj2gltf`, `gltf-pipeline` (replaced by gltfpack + ktx +
   the gltf-transform embed helper). `toktx` never used (v5 removed it).
 
-## Viewer
-- **three.js** + `GLTFLoader`, `MeshoptDecoder`, `KTX2Loader` (+ Basis
-  transcoder), `OrbitControls`.
-- Delivered as a **web component** (`<dri-viewer>`), bundled self-contained
-  (Vite/esbuild) into one ESM/IIFE plus the transcoder wasm. No runtime CDN.
+## Viewer (separate repo)
+The `<dri-viewer>` web component (three.js, delivered as a self-contained bundled
+web component) is **not part of this repo** — it lives in `dri-voyager` and
+consumes this pipeline's `manifest.json` + per-variant glb output. See that repo
+for its stack.
 
 ## Node.js
-Node is now a first-class build/runtime requirement:
+Node is a first-class pipeline requirement:
 - **Node 24+ LTS** (CI and the Singularity image both install Node 24).
-- Runs the viewer build toolchain (bundler, three.js) and can install/run
-  `gltfpack` where a binary isn't available.
+- Runs the bundled `@gltf-transform/core` KTX2-embed helper
+  (`preppy/node/embed.mjs`) and can install/run `gltfpack` where a binary isn't
+  available.
 
 ## Data / storage
 - **No database.** Output is static files: one self-contained `.glb` per variant

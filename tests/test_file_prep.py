@@ -3,6 +3,7 @@
 error-prone bits; the full chain is exercised by the Phase 4 smoke test.
 """
 
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -58,10 +59,29 @@ def test_hash_inputs_includes_obj_mtls_textures(tmp_path):
     assert tmp_path / 't.png' in files
 
 
+def test_ktx2_mode_cli_default_is_etc1s():
+    # Task 1.2: lock the recorded default so it can't silently drift. The
+    # encode-side default is covered in tests/test_texture.py.
+    parser = file_prep._build_parser()
+    args = parser.parse_args(['-i', 'x.json'])
+    assert args.ktx2_mode == 'etc1s'
+    action = next(a for a in parser._actions if a.dest == 'ktx2_mode')
+    assert action.choices == ['etc1s', 'uastc']
+
+
+def test_prune_keep_cli_parsing():
+    parser = file_prep._build_parser()
+    args = parser.parse_args(['-i', 'x.json', '--prune', '--prune-keep', '3'])
+    assert args.prune is True and args.prune_keep == 3
+    assert parser.parse_args(['-i', 'x.json']).prune_keep == 0  # default
+
+
 def _stub_opts(**over):
     base = dict(max_dim=8192, nodata_fill=None, target_error=0.2, validate=True,
-                deviation_budget=0.05, ktx2_mode='etc1s', hash_names=False,
-                tool_versions={}, uri='', smooth_normals=True)
+                deviation_budget=0.05, deviation_budget_frac=None,
+                on_over_budget='fail', ktx2_mode='etc1s', hash_names=False,
+                tool_versions={}, uri='', smooth_normals=True,
+                force_smooth_normals=False)
     base.update(over)
     return SimpleNamespace(**base)
 
@@ -115,4 +135,34 @@ def test_validate_report_only_without_budget(monkeypatch, tmp_path):
                  HausdorffResult(max_distance=99.0, mean=1.0, rms=1.0,
                                  bbox_diagonal=3.0, budget=None))
     res = _run_variant(tmp_path, _stub_opts(deviation_budget=None))
+    assert res['name'] == 'O_rgb.glb'
+
+
+def test_validate_gate_warns_over_budget(monkeypatch, tmp_path, caplog):
+    # --on-over-budget warn logs but does not raise; the asset still writes.
+    _patch_chain(monkeypatch, tmp_path,
+                 HausdorffResult(max_distance=0.1, mean=0.01, rms=0.02,
+                                 bbox_diagonal=3.0, budget=0.05))
+    with caplog.at_level(logging.WARNING):
+        res = _run_variant(tmp_path, _stub_opts(on_over_budget='warn'))
+    assert res['name'] == 'O_rgb.glb'
+    assert any('exceeds' in r.message for r in caplog.records)
+
+
+def test_validate_gate_fractional_budget_fails(monkeypatch, tmp_path):
+    # No absolute budget, but the fractional budget (2% of bbox) is exceeded.
+    _patch_chain(monkeypatch, tmp_path,
+                 HausdorffResult(max_distance=0.3, mean=0.01, rms=0.02,
+                                 bbox_diagonal=3.0, budget_frac=0.02))  # 10% > 2%
+    with pytest.raises(RuntimeError, match='budget-frac'):
+        _run_variant(tmp_path, _stub_opts(deviation_budget=None,
+                                          deviation_budget_frac=0.02))
+
+
+def test_validate_gate_within_fractional_budget(monkeypatch, tmp_path):
+    _patch_chain(monkeypatch, tmp_path,
+                 HausdorffResult(max_distance=0.03, mean=0.001, rms=0.002,
+                                 bbox_diagonal=3.0, budget_frac=0.02))  # 1% <= 2%
+    res = _run_variant(tmp_path, _stub_opts(deviation_budget=None,
+                                            deviation_budget_frac=0.02))
     assert res['name'] == 'O_rgb.glb'

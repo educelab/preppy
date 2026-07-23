@@ -3,12 +3,9 @@
 **Track ID:** viewer-widget_20260706
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-07-06
-**Status:** [~] Reopened 2026-07-10 for post-delivery feedback (Phases 5–12); Phases 1–4
-complete 2026-07-09. **Phases 5–12 all implemented + headless-verified 2026-07-10**.
-Phase 12 (floating controls + docked panels + puck-only light) is verified but
-**uncommitted** at the user's request (1Password SSH signing unavailable). Earlier phases'
-unsigned commits still need re-signing on review; Phase 12 awaits both commit + phase-gate
-approval.
+**Status:** [x] Complete — merged to `develop` 2026-07-11 (merge `2ebbc73`,
+squash `99b8177`). Phases 1–4 delivered 2026-07-09; Phases 5–12 (post-delivery
+feedback) implemented + headless-verified 2026-07-10, committed and merged 2026-07-11.
 
 ## Overview
 Scaffold the TS/bundler/web-component skeleton, get one variant rendering, then
