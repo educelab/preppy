@@ -99,6 +99,112 @@ def test_bake_normals_bare_faces_and_mtl_copy(tmp_path):
     assert (out_dir / 'm.mtl').read_text() == 'newmtl mat\nmap_Kd tex.tif\n'
 
 
+def test_bake_normals_strips_existing_vn(tmp_path):
+    # A flat quad that ALSO ships a bogus vn block + explicit v/vt/vn faces.
+    obj = tmp_path / 'm.obj'
+    obj.write_text(
+        'mtllib m.mtl\n'
+        'v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n'
+        'vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\n'
+        'vn 0 0 -1\nvn 0 0 -1\nvn 0 0 -1\nvn 0 0 -1\n'  # bogus -z source normals
+        'usemtl mat\n'
+        'f 1/1/1 2/2/2 3/3/3\n'
+        'f 1/1/4 3/3/2 4/4/1\n')  # deliberately mismatched normal refs
+    out = geometry.bake_normals(obj, tmp_path / 'm.normals.obj')
+    text = out.read_text()
+
+    # Source normals stripped; exactly one baked block, all +z.
+    assert 'vn 0.000000 0.000000 -1.000000\n' not in text
+    assert text.count('vn ') == 4
+    assert text.count('vn 0.000000 0.000000 1.000000\n') == 4
+    # Faces rewritten so each corner's normal == its own (absolute) vertex.
+    assert 'f 1/1/1 2/2/2 3/3/3\n' in text
+    assert 'f 1/1/1 3/3/3 4/4/4\n' in text
+    assert text.index('vn ') < text.index('f ')
+
+
+def test_is_vn_line_tolerates_whitespace():
+    # Keyword may be followed by a tab or extra spaces, not just one space.
+    assert geometry._is_vn_line('vn 0 0 1')
+    assert geometry._is_vn_line('vn\t0 0 1')
+    assert geometry._is_vn_line('vn  0 0 1\n')
+    # Not a vn line: vertex, uv, or a token that merely starts with "vn".
+    assert not geometry._is_vn_line('v 0 0 0')
+    assert not geometry._is_vn_line('vt 0 0')
+    assert not geometry._is_vn_line('vnfoo 0 0 1')
+    assert not geometry._is_vn_line('')
+
+
+def test_bake_normals_strips_tab_delimited_vn(tmp_path):
+    # A source whose vn block uses TABs must still be detected + stripped, else
+    # the source normals survive alongside the baked block and misalign indices.
+    obj = tmp_path / 'm.obj'
+    obj.write_text(
+        'v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n'
+        'vn\t0 0 -1\nvn\t0 0 -1\nvn\t0 0 -1\nvn\t0 0 -1\n'  # tab-separated, bogus
+        'f 1//1 2//2 3//3\n'
+        'f 1//1 3//3 4//4\n')
+    assert geometry._obj_has_normals(obj)  # detected despite the tab
+    out = geometry.bake_normals(obj, tmp_path / 'm.normals.obj')
+    text = out.read_text()
+    assert '-1.000000' not in text            # source -z normals gone
+    assert text.count('vn ') == 4             # exactly one baked block
+    assert text.count('vn 0.000000 0.000000 1.000000\n') == 4
+
+
+def test_bake_normals_negative_indices(tmp_path):
+    # Same flat quad, but faces use OBJ relative (negative) indices.
+    obj = tmp_path / 'm.obj'
+    obj.write_text(
+        'mtllib m.mtl\n'
+        'v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n'
+        'vt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\n'
+        'usemtl mat\n'
+        'f -4/-4 -3/-3 -2/-2\n'
+        'f -4/-4 -2/-2 -1/-1\n')
+    out = geometry.bake_normals(obj, tmp_path / 'm.normals.obj')
+    text = out.read_text()
+
+    # Relatives resolved (not silently wrapped) -> all +z normals.
+    assert text.count('vn 0.000000 0.000000 1.000000\n') == 4
+    # Normal index is the absolute vertex; position/UV refs kept verbatim.
+    assert 'f -4/-4/1 -3/-3/2 -2/-2/3\n' in text
+    assert 'f -4/-4/1 -2/-2/3 -1/-1/4\n' in text
+
+
+def _stub_gltfpack(monkeypatch):
+    monkeypatch.setattr(geometry.tools, 'require', lambda *a, **k: None)
+    monkeypatch.setattr(geometry.tools, 'run', lambda *a, **k: None)
+    monkeypatch.setattr(geometry, 'obj_to_geometry_glb_cmd', lambda *a, **k: [])
+
+
+def test_obj_to_geometry_glb_passes_source_normals_through(tmp_path, monkeypatch):
+    obj = tmp_path / 'm.obj'
+    obj.write_text('v 0 0 0\nvn 0 0 1\nf 1//1\n')  # source already ships normals
+    calls = []
+    _stub_gltfpack(monkeypatch)
+    monkeypatch.setattr(geometry, 'bake_normals',
+                        lambda i, o, **k: calls.append(o) or Path(o))
+    # Default: source has vn -> no bake (pass through).
+    geometry.obj_to_geometry_glb(obj, tmp_path / 'g.glb', smooth_normals=True)
+    assert calls == []
+    # --force-smooth-normals -> rebake even though the source ships normals.
+    geometry.obj_to_geometry_glb(obj, tmp_path / 'g2.glb', smooth_normals=True,
+                                 force_smooth_normals=True)
+    assert len(calls) == 1
+
+
+def test_obj_to_geometry_glb_bakes_when_normals_absent(tmp_path, monkeypatch):
+    obj = tmp_path / 'm.obj'
+    obj.write_text('v 0 0 0\nf 1\n')  # no vn in the source
+    calls = []
+    _stub_gltfpack(monkeypatch)
+    monkeypatch.setattr(geometry, 'bake_normals',
+                        lambda i, o, **k: calls.append(o) or Path(o))
+    geometry.obj_to_geometry_glb(obj, tmp_path / 'g.glb', smooth_normals=True)
+    assert len(calls) == 1
+
+
 def test_hausdorff_result_budget():
     r = HausdorffResult(max_distance=0.03, mean=0.001, rms=0.002,
                         bbox_diagonal=3.0, budget=0.05)
@@ -111,6 +217,35 @@ def test_hausdorff_result_budget():
     r3 = HausdorffResult(max_distance=0.1, mean=0.01, rms=0.02)
     assert r3.within_budget is None            # no budget set
     assert r3.max_fraction_of_diagonal is None  # no diagonal
+
+
+def test_hausdorff_result_frac_budget():
+    # Fractional budget compares max_distance/bbox_diagonal against budget_frac.
+    r = HausdorffResult(max_distance=0.03, mean=0.001, rms=0.002,
+                        bbox_diagonal=3.0, budget_frac=0.02)  # 1% <= 2%
+    assert r.within_frac_budget is True
+    assert r.over_budget is False
+
+    r2 = HausdorffResult(max_distance=0.09, mean=0.01, rms=0.02,
+                         bbox_diagonal=3.0, budget_frac=0.02)  # 3% > 2%
+    assert r2.within_frac_budget is False
+    assert r2.over_budget is True
+
+    r3 = HausdorffResult(max_distance=0.09, mean=0.01, rms=0.02,
+                         budget_frac=0.02)      # no diagonal -> unknown
+    assert r3.within_frac_budget is None
+    assert r3.over_budget is False
+
+    # over_budget OR's the two budgets: within absolute but over fractional.
+    r4 = HausdorffResult(max_distance=0.09, mean=0.01, rms=0.02,
+                         bbox_diagonal=3.0, budget=1.0, budget_frac=0.02)
+    assert r4.within_budget is True
+    assert r4.within_frac_budget is False
+    assert r4.over_budget is True
+
+    # neither budget set -> report-only, never over budget.
+    r5 = HausdorffResult(max_distance=99.0, mean=1.0, rms=1.0, bbox_diagonal=3.0)
+    assert r5.over_budget is False
 
 
 def test_validate_rejects_meshopt_glb(monkeypatch, tmp_path):

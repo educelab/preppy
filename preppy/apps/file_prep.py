@@ -136,7 +136,8 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     #    them off the quantized grid.
     geom = geometry.obj_to_geometry_glb(
         obj_path, var_tmp / 'geom.glb', target_error=opts.target_error,
-        smooth_normals=opts.smooth_normals)
+        smooth_normals=opts.smooth_normals,
+        force_smooth_normals=opts.force_smooth_normals)
 
     # 3b. Optional Hausdorff gate on the decimation (opt-in; pymeshlab can't read
     #     the meshopt glb, so validate a plain re-pack at the same -si). Runs
@@ -149,22 +150,33 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
         # on any it can't decode (incl. the placeholder an untextured material
         # leaves as image[0]). Validation is geometry-only, so drop them.
         geometry.strip_textures(plain)
-        res = geometry.validate(obj_path, plain, budget=opts.deviation_budget)
+        res = geometry.validate(obj_path, plain, budget=opts.deviation_budget,
+                                budget_frac=opts.deviation_budget_frac)
         detail = f'max={res.max_distance:.4g}'
         if res.max_fraction_of_diagonal is not None:
             detail += f' ({res.max_fraction_of_diagonal * 100:.3g}% of bbox)'
-        if res.within_budget is False:
-            raise RuntimeError(
-                f'variant {suffix!r}: decimation deviation {detail} exceeds '
-                f'--deviation-budget {opts.deviation_budget}')
-        log.info('  validated %s: Hausdorff %s', suffix, detail)
+        if res.over_budget:
+            budgets = []
+            if res.within_budget is False:
+                budgets.append(f'--deviation-budget {opts.deviation_budget}')
+            if res.within_frac_budget is False:
+                budgets.append(
+                    f'--deviation-budget-frac {opts.deviation_budget_frac}')
+            msg = (f'variant {suffix!r}: decimation deviation {detail} exceeds '
+                   f'{" / ".join(budgets)}')
+            if opts.on_over_budget == 'fail':
+                raise RuntimeError(msg)
+            log.warning('  %s (continuing; --on-over-budget warn)', msg)
+        else:
+            log.info('  validated %s: Hausdorff %s', suffix, detail)
 
     # 4. Name the output asset (content hash over inputs+config, never output).
     digest = None
     if opts.hash_names:
         config = {'target_error': opts.target_error, 'ktx2_mode': opts.ktx2_mode,
                   'max_dim': opts.max_dim, 'nodata_fill': nodata,
-                  'smooth_normals': opts.smooth_normals}
+                  'smooth_normals': opts.smooth_normals,
+                  'force_smooth_normals': opts.force_smooth_normals}
         digest = cache.content_hash(
             hash_inputs(obj_path, material_textures), config=config,
             tool_versions=opts.tool_versions)
@@ -256,7 +268,8 @@ def process_object(object_cfg: Mapping, *, data_root: Path, out_dir: Path,
             asset_names.append(thumb_name)
 
     if opts.prune:
-        removed = cache.prune(obj_out_dir, keep=asset_names)
+        removed = cache.prune(obj_out_dir, keep=asset_names,
+                              keep_last=opts.prune_keep)
         if removed:
             log.info('  pruned %d stale asset(s) from %s/', len(removed), prefix)
 
@@ -302,13 +315,32 @@ def _build_parser() -> argparse.ArgumentParser:
                                'OBJ; the viewer computes normals off the quantized '
                                'grid instead (Phase 7 default: bake them)')
     geo_opts.set_defaults(smooth_normals=True)
+    geo_opts.add_argument('--force-smooth-normals', action='store_true',
+                          help='Rebake smooth normals even when the source OBJ '
+                               'already ships vertex normals (default: pass '
+                               'source normals through; only bake when absent). '
+                               'Use for a source with bad/faceted normals.')
     geo_opts.add_argument('--validate', action='store_true',
                           help='Hausdorff-validate each decimation (needs the '
                                'pymeshlab extra; adds a plain gltfpack pass)')
     geo_opts.add_argument('--deviation-budget', type=float, default=None,
                           metavar='FLOAT',
-                          help='Max allowed Hausdorff deviation in mesh units; '
-                               'over budget fails the run (report-only if unset)')
+                          help='Max allowed Hausdorff deviation in mesh units '
+                               "(OR'd with --deviation-budget-frac); over budget "
+                               'fails the run subject to --on-over-budget '
+                               '(report-only if unset)')
+    geo_opts.add_argument('--deviation-budget-frac', type=float, default=None,
+                          metavar='FRAC',
+                          help='Max allowed Hausdorff deviation as a fraction of '
+                               'the mesh bbox diagonal — scale-independent, so it '
+                               'ports across the arbitrary-scale objects a '
+                               "migration feeds the pipeline. OR'd with "
+                               '--deviation-budget (report-only if both unset)')
+    geo_opts.add_argument('--on-over-budget', choices=['fail', 'warn'],
+                          default='fail',
+                          help='Action when a variant exceeds the deviation '
+                               "budget: 'fail' aborts the run, 'warn' logs and "
+                               'continues (default: fail)')
 
     out_opts = parser.add_argument_group('output options')
     out_opts.add_argument('--hash-names', default=True,
@@ -320,7 +352,13 @@ def _build_parser() -> argparse.ArgumentParser:
                                'the manifest (default: relative, within folder)')
     out_opts.add_argument('--prune', action='store_true',
                           help='After writing, delete hashed asset files in each '
-                               'object folder no longer referenced by its manifest')
+                               'object folder no longer referenced by its manifest '
+                               '(retention window set by --prune-keep)')
+    out_opts.add_argument('--prune-keep', type=int, default=0, metavar='N',
+                          help='With --prune, also retain the newest N previous '
+                               'generations of each variant, so manifests already '
+                               'served during a rollover keep resolving (default: '
+                               '0 = drop all unreferenced). Ordered by mtime.')
     out_opts.add_argument('--thumbnails', default=True,
                           action=argparse.BooleanOptionalAction,
                           help='Emit a <prefix>_thumb.jpg per object (from the '
