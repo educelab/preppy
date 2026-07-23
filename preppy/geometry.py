@@ -74,25 +74,54 @@ def obj_to_geometry_glb(obj: PathLike, out: PathLike, *,
                         target_error: Optional[float] = DEFAULT_TARGET_ERROR,
                         meshopt: bool = True, quantize: bool = True,
                         smooth_normals: bool = False,
+                        force_smooth_normals: bool = False,
                         extra: Optional[List[str]] = None) -> Path:
     """Run gltfpack to produce the decimated geometry glb; return its path.
 
-    With ``smooth_normals`` the source OBJ is first run through
-    :func:`bake_normals` (a normal-bearing copy in ``out``'s directory) and
-    gltfpack packs that copy, so the delivered glb carries a NORMAL attribute.
-    Leave it off for the plain validation re-pack — Hausdorff is geometry-only
-    and baking would just cost time.
+    Normals policy (``smooth_normals``, the delivery default):
+
+    - The delivered glb must carry good per-vertex normals. If the **source OBJ
+      already ships** them (``vn`` lines — common in photogrammetry/MVS
+      exporters, which compute them on the pristine full-res mesh) they are
+      passed straight through to gltfpack: they are computed on better geometry
+      than we can reconstruct downstream and may encode intentional creases.
+    - If the source has **no** normals, we bake area-weighted smooth normals from
+      the un-quantized source positions via :func:`bake_normals` first, so the
+      viewer never has to compute them off gltfpack's quantized position grid
+      (which facets/jitters — Phase 7).
+    - ``force_smooth_normals`` overrides the pass-through and rebakes even when
+      the source ships normals (escape hatch for a source with bad/faceted
+      normals). ``smooth_normals=False`` skips both — the viewer computes.
+
+    Leave ``smooth_normals`` off for the plain validation re-pack — Hausdorff is
+    geometry-only and baking would just cost time.
     """
     tools.require('gltfpack')
     obj, out = Path(obj), Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     src = obj
-    if smooth_normals:
+    if smooth_normals and (force_smooth_normals or not _obj_has_normals(obj)):
         src = bake_normals(obj, out.with_name(out.stem + '.normals.obj'))
     cmd = obj_to_geometry_glb_cmd(src, out, target_error=target_error,
                                   meshopt=meshopt, quantize=quantize, extra=extra)
     tools.run(cmd)
     return out
+
+
+def _is_vn_line(line: str) -> bool:
+    """True if ``line`` is a vertex-normal (``vn``) declaration.
+
+    Keys on the first whitespace-delimited token, so it tolerates *any* separator
+    after the keyword — a tab or multiple spaces, not just the single space a
+    naive ``startswith('vn ')`` assumes (the Wavefront grammar allows either).
+    """
+    return line.split(maxsplit=1)[:1] == ['vn']
+
+
+def _obj_has_normals(obj: PathLike) -> bool:
+    """Whether the OBJ declares any vertex normals (``vn`` lines)."""
+    with Path(obj).open() as f:
+        return any(_is_vn_line(line) for line in f)
 
 
 def bake_normals(obj_in: PathLike, obj_out: PathLike) -> Path:
@@ -113,7 +142,12 @@ def bake_normals(obj_in: PathLike, obj_out: PathLike) -> Path:
     material (and the UVs) even when it can't decode the texture, exactly as it
     does for the undecodable source TIFFs. Polygons are fan-triangulated for the
     area weighting only; the written faces keep their original arity (gltfpack
-    triangulates). Faces that already carry a normal index are left as-is.
+    triangulates).
+
+    Any ``vn`` block already present in the source is **dropped** and every face
+    normal ref is rewritten to the corner's own (freshly baked) vertex normal, so
+    the result is idempotent regardless of what the source shipped. The caller
+    (:func:`obj_to_geometry_glb`) decides *whether* to rebake; this always does.
     """
     import numpy as np
 
@@ -128,7 +162,8 @@ def bake_normals(obj_in: PathLike, obj_out: PathLike) -> Path:
             p = line.split()
             positions.append((float(p[1]), float(p[2]), float(p[3])))
         elif line.startswith('f '):
-            corners = [int(t.split('/', 1)[0]) - 1 for t in line.split()[1:]]
+            n = len(positions)  # vertices seen so far (to resolve relative refs)
+            corners = [_vidx(t.split('/', 1)[0], n) for t in line.split()[1:]]
             for i in range(1, len(corners) - 1):  # fan-triangulate
                 tri.append((corners[0], corners[i], corners[i + 1]))
 
@@ -147,13 +182,19 @@ def bake_normals(obj_in: PathLike, obj_out: PathLike) -> Path:
 
     with obj_out.open('w') as out:
         wrote_normals = False
+        nverts = 0
         for line in lines:
-            if line.startswith('f '):
-                if not wrote_normals:  # emit the vn block just before first use
+            if line.startswith('v '):
+                nverts += 1
+                out.write(line + '\n')
+            elif _is_vn_line(line):
+                continue  # drop source normals; the baked block replaces them
+            elif line.startswith('f '):
+                if not wrote_normals:  # emit the baked vn block just before first use
                     for x, y, z in vn:
                         out.write(f'vn {x:.6f} {y:.6f} {z:.6f}\n')
                     wrote_normals = True
-                out.write(_face_with_normals(line))
+                out.write(_face_with_normals(line, nverts))
             elif line.startswith('mtllib '):
                 libs = line.split()[1:]
                 for lib in libs:  # copy each .mtl next to the baked OBJ
@@ -167,21 +208,38 @@ def bake_normals(obj_in: PathLike, obj_out: PathLike) -> Path:
     return obj_out
 
 
-def _face_with_normals(line: str) -> str:
+def _vidx(tok: str, nverts: int) -> int:
+    """Resolve an OBJ vertex reference token to a 0-based index.
+
+    Positive tokens are 1-based absolute; **negative** tokens are relative to the
+    vertices declared so far (``-1`` == the most recently declared), per the
+    Wavefront spec. ``nverts`` is that running count. Naive ``int(tok) - 1`` wraps
+    silently under numpy fancy-indexing for negatives — this doesn't.
+    """
+    i = int(tok)
+    return nverts + i if i < 0 else i - 1
+
+
+def _face_with_normals(line: str, nverts: int) -> str:
     """Rewrite an OBJ ``f`` line so each corner references its own vertex normal.
 
-    ``v/vt`` → ``v/vt/v``; bare ``v`` → ``v//v``. A corner that already carries a
-    normal index (two slashes) is left untouched.
+    The baked ``vn`` block has one entry per vertex (1:1 with ``v``) and is
+    emitted in full before any face, so each corner's normal index is its
+    **absolute** 1-based vertex index (via :func:`_vidx`, so relative/negative
+    refs point at the right baked normal). Positions/UVs are copied verbatim
+    (still valid at their original positions); only the normal field is
+    (re)written, dropping any source normal index. ``v/vt`` → ``v/vt/N``, bare
+    ``v`` → ``v//N``.
     """
     out = ['f']
     for ref in line.split()[1:]:
         fields = ref.split('/')
-        if len(fields) >= 3 and fields[2]:
-            out.append(ref)
-        elif len(fields) == 1:
-            out.append(f'{ref}//{ref}')
-        else:  # v/vt (or v/ ) -> append normal index == vertex index
-            out.append(f'{fields[0]}/{fields[1]}/{fields[0]}')
+        v = fields[0]
+        n_abs = _vidx(v, nverts) + 1  # absolute 1-based index into the baked block
+        if len(fields) >= 2 and fields[1]:
+            out.append(f'{v}/{fields[1]}/{n_abs}')
+        else:
+            out.append(f'{v}//{n_abs}')
     return ' '.join(out) + '\n'
 
 
@@ -290,6 +348,7 @@ class HausdorffResult:
     rms: float
     bbox_diagonal: Optional[float] = None
     budget: Optional[float] = None
+    budget_frac: Optional[float] = None
 
     @property
     def within_budget(self) -> Optional[bool]:
@@ -303,16 +362,38 @@ class HausdorffResult:
             return None
         return self.max_distance / self.bbox_diagonal
 
+    @property
+    def within_frac_budget(self) -> Optional[bool]:
+        """Whether the deviation stays under ``budget_frac`` (a fraction of the
+        bbox diagonal). ``None`` when no fractional budget is set or the diagonal
+        is unknown."""
+        if self.budget_frac is None:
+            return None
+        frac = self.max_fraction_of_diagonal
+        if frac is None:
+            return None
+        return frac <= self.budget_frac
+
+    @property
+    def over_budget(self) -> bool:
+        """True when either budget (absolute or fractional) is set and exceeded.
+        False when no budget is set (report-only)."""
+        return self.within_budget is False or self.within_frac_budget is False
+
 
 def validate(original: PathLike, decimated: PathLike, *,
-             budget: Optional[float] = None, samplenum: int = 100000,
+             budget: Optional[float] = None, budget_frac: Optional[float] = None,
+             samplenum: int = 100000,
              symmetric: bool = True) -> HausdorffResult:
     """Hausdorff-check the ``decimated`` mesh against the ``original``.
 
     Both must be pymeshlab-readable (OBJ/PLY/STL or a **plain** glb — not a
     meshopt-compressed one, which crashes pymeshlab). Returns a
-    :class:`HausdorffResult`; when ``budget`` is given, ``within_budget`` reports
-    whether the max deviation stays under it.
+    :class:`HausdorffResult`; when ``budget`` (absolute mesh units) or
+    ``budget_frac`` (a fraction of the bbox diagonal, scale-independent) is
+    given, ``within_budget`` / ``within_frac_budget`` report whether the max
+    deviation stays under each, and ``over_budget`` is True if either is
+    exceeded.
 
     Requires the optional ``pymeshlab`` dependency (``pip install .[validate]``).
     """
@@ -351,4 +432,5 @@ def validate(original: PathLike, decimated: PathLike, *,
 
     return HausdorffResult(
         max_distance=max_d, mean=mean_d, rms=rms_d,
-        bbox_diagonal=res.get('diag_mesh_0'), budget=budget)
+        bbox_diagonal=res.get('diag_mesh_0'), budget=budget,
+        budget_frac=budget_frac)

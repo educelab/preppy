@@ -242,10 +242,17 @@ See `spike/FINDINGS.md` for evidence. Go decision: **GO** on the pivot.
 1. **Decimation budget:** `gltfpack -si 0.2` (≈20%). d20–d50 look good; **d10 loses too
    much** detail for measurement. Hausdorff at 20% is ~0.01% of bbox — negligible.
 2. **KTX2 mode:** **ETC1S** (5.8 MB vs 53 MB UASTC; no visible quality difference on this
-   material). Revisit per-variant only if legibility needs it.
+   material) — the default `--ktx2-mode` (batch-wide). The spike's *per-variant* UASTC
+   override was **deferred** (Task 1.2): no shipping variant needs UASTC and the size cost
+   is ~9×. Promote to its own task if a hero/detail variant later needs it.
 3. Thumbnail source: unchanged (texture crop for now).
-4. **Normals:** **runtime `computeVertexNormals()`** in the viewer — computed vs baked were
-   visually identical on these near-flat trays; no pipeline bake step needed.
+4. **Normals:** the **pipeline bakes** area-weighted smooth normals from the un-quantized
+   source (Phase 7) — the spike's "runtime `computeVertexNormals()`" faceted on gltfpack's
+   quantized position grid once real delivery builds quantized positions. Policy (Task 1.7):
+   bake **only when the source lacks `vn`**; pass source normals through when present (they
+   are computed on pristine geometry and may encode creases). `--force-smooth-normals`
+   rebakes anyway; `--no-smooth-normals` defers to the viewer. The viewer's
+   `computeVertexNormals()` is now a fallback for normalless/legacy glbs only.
 5. **Variant alignment:** variants **do** share a frame — registration works once the glTF node
    transform is applied (see #8).
 

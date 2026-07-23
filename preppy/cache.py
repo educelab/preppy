@@ -14,7 +14,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Iterable, List, Mapping, Optional, Set, Union
+from typing import Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 
 PathLike = Union[str, Path]
 
@@ -23,6 +23,11 @@ _CHUNK = 1 << 20  # 1 MiB — OBJs and textures are large.
 
 #: Matches a hashed asset name: ``...<name>.<8 hex>.<ext>``.
 _HASHED_RE = re.compile(r'\.[0-9a-f]{%d}\.[^.]+$' % DEFAULT_HASH_LENGTH)
+
+#: Splits a hashed asset name into its (stem, ext), dropping the hash — so
+#: ``MVS_rgb.a1b2c3d4.glb`` groups with ``MVS_rgb.<other>.glb`` but not with
+#: ``MVS_ir.*`` — for per-variant keep-last-N retention.
+_HASHED_STEM_RE = re.compile(r'^(.*)\.[0-9a-f]{%d}\.([^.]+)$' % DEFAULT_HASH_LENGTH)
 
 
 def content_hash(inputs: Iterable[PathLike],
@@ -72,22 +77,45 @@ def is_hashed_asset(name: str) -> bool:
 
 
 def prune(directory: PathLike, keep: Iterable[str], *,
-          dry_run: bool = False) -> List[Path]:
+          keep_last: int = 0, dry_run: bool = False) -> List[Path]:
     """Delete hashed asset files in ``directory`` not named in ``keep``.
 
     Only files matching the hashed pattern are considered, so stable-named
     manifests/thumbnails are never removed. ``keep`` is the set of basenames
     still referenced by a current manifest. Returns the removed (or, with
-    ``dry_run``, the would-be-removed) paths.
+    ``dry_run``, the would-be-removed) paths, sorted by name.
+
+    ``keep_last`` (default 0) is a **retention window**: with ``keep_last=N``,
+    the newest ``N`` *unreferenced* generations of **each variant** (grouped by
+    ``<prefix>_<suffix>.<ext>``, ordered by mtime) are also retained, so a
+    manifest served to an in-flight client during a rollover still resolves its
+    hashed URIs. ``keep_last=0`` drops every unreferenced hashed file (the
+    historic behavior). *Caveat:* ordering is by mtime, which a copy/restore that
+    doesn't preserve timestamps can scramble.
     """
     keep_set: Set[str] = set(keep)
     removed: List[Path] = []
     directory = Path(directory)
     if not directory.is_dir():
         return removed
-    for p in sorted(directory.iterdir()):
-        if p.is_file() and is_hashed_asset(p.name) and p.name not in keep_set:
-            removed.append(p)
-            if not dry_run:
-                p.unlink()
+
+    candidates = [p for p in directory.iterdir()
+                  if p.is_file() and is_hashed_asset(p.name)
+                  and p.name not in keep_set]
+
+    if keep_last > 0:
+        by_stem: Dict[Tuple[str, str], List[Path]] = {}
+        for p in candidates:
+            m = _HASHED_STEM_RE.match(p.name)
+            key = (m.group(1), m.group(2)) if m else (p.name, '')
+            by_stem.setdefault(key, []).append(p)
+        candidates = []
+        for group in by_stem.values():
+            group.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            candidates.extend(group[keep_last:])  # keep the newest N per variant
+
+    for p in sorted(candidates):
+        removed.append(p)
+        if not dry_run:
+            p.unlink()
     return removed

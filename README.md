@@ -94,6 +94,7 @@ current hashed URIs. Useful flags:
 | `--data-root DIR` | root that relative `obj` paths resolve against (default: CWD) |
 | `--uri PREFIX` | absolute-URL prefix for manifest `uri`s |
 | `--prune` | delete hashed assets no longer referenced by a manifest |
+| `--prune-keep N` | with `--prune`, also keep the newest `N` prior generations of each variant (rollover window; default `0`) |
 | `--thumbnail-mode {render,texture}` | thumbnail source: a rendered model preview of the default variant (default; needs the `preview` extra, falls back to `texture` if unavailable) or a texture center-crop |
 | `--preview-bg COLOR` | background the rendered preview composites over (hex, `#` optional; default `222222`) |
 | `--keep-tmp` | keep intermediate PNG/KTX2/geometry files |
@@ -108,6 +109,39 @@ missing the run falls back to the texture center-crop (`--thumbnail-mode
 texture`) automatically.
 
 Run `voyager-preppy -h` for the complete list.
+
+### Hosting / caching
+
+Serve the catalog with a two-tier cache policy so cache-busting is safe:
+
+- **hashed assets** (`…​.<hash>.glb` / `.ktx2`) never change under a given name —
+  cache them `immutable`, effectively forever;
+- **`manifest.json` / `index.json`** keep stable names — serve them `no-cache`
+  (always revalidate) so a viewer immediately picks up new hashed URIs.
+
+A rebuild that changes an input mints new hashed names and rewrites the manifest;
+the viewer revalidates the manifest and pulls the new immutable assets. Pair this
+with `--prune --prune-keep N` so a manifest already served to an in-flight client
+during a rollover can still resolve its (now-previous-generation) hashed URIs.
+
+See [`docs/hosting/htaccess.example`](docs/hosting/htaccess.example) for a
+ready-to-adapt Apache configuration (final host TBD; tune to your deployment).
+
+## Testing
+
+```shell
+pip install -e '.[test]'    # pytest (+ pymeshlab/pyrender via [validate]/[preview])
+python -m pytest tests/
+```
+
+Tests that need the external toolchain (`magick`/`ktx`/`gltfpack`/`node`), `pymeshlab`,
+or an offscreen-GL backend **skip cleanly** when those are absent, so a bare run still
+covers the pure logic. CI runs this across Python 3.11–3.13 (plus a manual `integration`
+job that exercises the full toolchain); see `.gitlab-ci.yml`.
+
+> The `<dri-viewer>` web component that consumes this pipeline's output lives in a
+> separate repository (`dri-voyager`), with its own TypeScript/Vitest/Playwright
+> suite. This repo is the model-preparation pipeline only.
 
 ### Legacy path (deprecated)
 
