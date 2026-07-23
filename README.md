@@ -1,4 +1,4 @@
-# DRI Voyager Preppy
+# Preppy
 
 Mesh preparation for DRI Voyager.
 
@@ -37,8 +37,8 @@ deps installed once as shown above.
 Verify everything is installed and new enough:
 
 ```shell
-voyager-check-tools              # all CLI tools + optional model-preview backend
-voyager-check-tools preview      # just probe the model-preview render toolchain
+preppy-check-tools               # all CLI tools + optional model-preview backend
+preppy-check-tools preview       # just probe the model-preview render toolchain
 ```
 
 The `preview` line is informational: it renders a tiny offscreen frame to confirm
@@ -47,12 +47,12 @@ pipeline still runs — thumbnails fall back to a texture crop.
 
 ## Usage
 
-`voyager-preppy` turns source OBJs + textures into **one self-contained `.glb`
+`preppy` turns source OBJs + textures into **one self-contained `.glb`
 per variant** (meshopt geometry with embedded KTX2) plus a viewer-native
 per-object manifest.
 
 ```shell
-voyager-preppy -i config.json -o out/
+preppy -i config.json -o out/
 ```
 
 The input config is a flat array of **objects**, each with a flat `variants[]`
@@ -66,7 +66,7 @@ Relative `obj` paths resolve against `--data-root` (default: the current working
 directory), so the config file can live anywhere:
 
 ```shell
-voyager-preppy -i config.json -o out/ --data-root /path/to/meshes/
+preppy -i config.json -o out/ --data-root /path/to/meshes/
 ```
 
 Output layout (per-object directory named by `prefix`, defaults to `id`):
@@ -108,7 +108,7 @@ capture of what `<dri-viewer>` shows. Rendering needs the `preview` extra
 missing the run falls back to the texture center-crop (`--thumbnail-mode
 texture`) automatically.
 
-Run `voyager-preppy -h` for the complete list.
+Run `preppy -h` for the complete list.
 
 ### Hosting / caching
 
@@ -137,7 +137,30 @@ python -m pytest tests/
 Tests that need the external toolchain (`magick`/`ktx`/`gltfpack`/`node`), `pymeshlab`,
 or an offscreen-GL backend **skip cleanly** when those are absent, so a bare run still
 covers the pure logic. CI runs this across Python 3.11–3.13 (plus a manual `integration`
-job that exercises the full toolchain); see `.gitlab-ci.yml`.
+job that exercises the full toolchain); see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+## Docker
+
+A prebuilt multi-arch (amd64/arm64) image bundling the full toolchain is published
+to the GitHub Container Registry on every push to `develop` (tag `edge`) and on
+release tags (`vX.Y.Z`, `latest`):
+
+```shell
+docker pull ghcr.io/educelab/preppy:edge
+
+# The image's default command is `preppy -h`; run the pipeline over a mounted dir:
+docker run --rm -v "$PWD":/data -w /data ghcr.io/educelab/preppy:edge \
+    preppy -i config.json -o out/
+
+# Any of the console scripts work as the command, e.g.:
+docker run --rm ghcr.io/educelab/preppy:edge preppy-check-tools
+```
+
+To build it locally (see [`Dockerfile`](Dockerfile)):
+
+```shell
+docker build -t preppy .
+```
 
 > The `<dri-viewer>` web component that consumes this pipeline's output lives in a
 > separate repository (`dri-voyager`), with its own TypeScript/Vitest/Playwright
@@ -145,7 +168,7 @@ job that exercises the full toolchain); see `.gitlab-ci.yml`.
 
 ### Legacy path (deprecated)
 
-The single-object `voyager-obj2glb` tool (and its `convert.py` core) still uses
+The single-object `preppy-obj2glb` tool (and its `convert.py` core) still uses
 `obj2gltf` + `gltf-pipeline` to emit a Draco-compressed GLB. It is **deprecated**
 in favor of the delivery pipeline above and will be removed. To keep using it
 during the transition:

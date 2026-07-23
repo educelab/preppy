@@ -1,9 +1,9 @@
 {
-  "name": "dri-voyager-preppy-node",
-  "version": "1.0.0",
+  "name": "preppy-node",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "Node helper (embed.mjs) that embeds KTX2 textures into the meshopt geometry glb for dri-voyager-preppy. Run `npm install` here before using the delivery pipeline.",
+  "description": "Node helper (embed.mjs) that embeds KTX2 textures into the meshopt geometry glb for preppy. Run `npm install` here before using the delivery pipeline.",
   "engines": {
     "node": ">=20"
   },

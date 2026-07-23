@@ -1,0 +1,21 @@
+# Keep the build context small and reproducible. The image installs deps fresh
+# (pip, npm), so none of these belong in it.
+.git
+.github
+.gitlab-ci.yml
+.idea
+.pytest_cache
+.DS_Store
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+**/venv
+**/.venv
+**/node_modules
+singularity
+spike
+conductor
+docs
+*.sif
+data
+logs

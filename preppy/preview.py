@@ -49,7 +49,7 @@ def probe() -> "tuple[bool, str]":
     initializes an :class:`~pyrender.OffscreenRenderer` and renders a trivial
     scene — the GL-context creation is the part that fails on headless nodes, so
     a bare import check would report a false positive. Used by
-    ``voyager-check-tools`` to tell whether the rendered thumbnail is available
+    ``preppy-check-tools`` to tell whether the rendered thumbnail is available
     (the pipeline falls back to a texture crop when it is not).
     """
     import os
