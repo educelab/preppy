@@ -1,4 +1,4 @@
-"""``voyager-preppy`` — batch orchestrator for the delivery pipeline.
+"""``preppy`` — batch orchestrator for the delivery pipeline.
 
 For each object in the input config, and for **each variant independently** (no
 geometry grouping — ADR-0002 amended), run the validated chain:

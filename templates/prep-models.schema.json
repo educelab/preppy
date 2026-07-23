@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitlab.com/educelab/dri-voyager-preppy/prep-models.schema.json",
+  "$id": "https://github.com/educelab/preppy/prep-models.schema.json",
 
   "title": "DRI Voyager Data Prep Input File",
-  "description": "Input to voyager-preppy: a flat array of objects, each declaring a flat variants[] (ADR-0002 amended — no geometry grouping). Each variant becomes one self-contained glb; each object gets one per-object manifest.",
+  "description": "Input to preppy: a flat array of objects, each declaring a flat variants[] (ADR-0002 amended — no geometry grouping). Each variant becomes one self-contained glb; each object gets one per-object manifest.",
 
   "type": "array",
   "items": { "$ref": "#/$defs/object" },

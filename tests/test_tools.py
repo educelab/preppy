@@ -1,7 +1,7 @@
 """Unit tests for the pure logic in ``preppy.tools`` — version parsing,
 comparison, executable-name resolution, and report formatting. These are the
 easy-to-get-wrong bits; the actual subprocess probing is covered by the
-``voyager-check-tools`` console script against a real install.
+``preppy-check-tools`` console script against a real install.
 """
 
 import sys

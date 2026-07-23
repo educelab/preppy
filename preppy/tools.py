@@ -14,7 +14,7 @@ Node-installed CLIs are invoked as ``<name>.cmd`` on Windows (npm creates a
 ``convert.py`` used for ``obj2gltf`` / ``gltf-pipeline``. Native binaries
 (``ktx``, ``mogrify``) are resolved by :func:`shutil.which` as-is.
 
-Use :func:`check_all` (or the ``voyager-check-tools`` console script) to report
+Use :func:`check_all` (or the ``preppy-check-tools`` console script) to report
 what is available, and :func:`require` in the leaf modules to fail early with an
 actionable message when a needed tool is missing or too old.
 """
@@ -34,7 +34,7 @@ _VERSION_RE = re.compile(r'v?(\d+)\.(\d+)(?:\.(\d+))?')
 #: Default wall-clock limit (seconds) for a single external tool invocation via
 #: :func:`run`. Generous — encoding/decimating a large mesh legitimately takes a
 #: while — but bounded so a wedged tool can't hang a whole batch indefinitely.
-#: The ``voyager-preppy`` ``--tool-timeout`` flag overrides this at startup.
+#: The ``preppy`` ``--tool-timeout`` flag overrides this at startup.
 DEFAULT_TIMEOUT: Optional[float] = 600.0
 
 #: Short, fixed limit for version probes (:func:`check_tool`); reading a version

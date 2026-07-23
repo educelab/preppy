@@ -148,7 +148,7 @@ def _run_check_tools(monkeypatch, argv):
     import contextlib
     from preppy.apps import check_tools
 
-    monkeypatch.setattr('sys.argv', ['voyager-check-tools', *argv])
+    monkeypatch.setattr('sys.argv', ['preppy-check-tools', *argv])
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         code = check_tools.main()

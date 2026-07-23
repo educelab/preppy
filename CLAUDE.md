@@ -6,17 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 DRI Voyager Preppy turns source OBJs + textures into web-ready 3D assets for the custom `<dri-viewer>` web component. Each imaged object has several **variants** (RGB, IR, PGS, …); the pipeline emits **one self-contained `.glb` per variant** (meshopt-compressed geometry with its KTX2 texture(s) embedded) plus a viewer-native per-object **`manifest.json`** and an optional top-level `index.json`.
 
-This replaced the original Smithsonian-Voyager path (`.svx.json` scene descriptors + `items.json`, via `obj2gltf` + `gltf-pipeline`). That legacy path survives only as the deprecated `voyager-obj2glb` tool (`convert.py`).
+This replaced the original Smithsonian-Voyager path (`.svx.json` scene descriptors + `items.json`, via `obj2gltf` + `gltf-pipeline`). That legacy path survives only as the deprecated `preppy-obj2glb` tool (`convert.py`).
 
 ## External dependencies (not pip-installable)
 
-The pipeline shells out to CLI tools that must be on `PATH` (see README for install; `tools.py` detects them, `voyager-check-tools` reports status). npm-installed CLIs are invoked as `<name>.cmd` on Windows (`platform.system()` check in `tools.py`).
+The pipeline shells out to CLI tools that must be on `PATH` (see README for install; `tools.py` detects them, `preppy-check-tools` reports status). npm-installed CLIs are invoked as `<name>.cmd` on Windows (`platform.system()` check in `tools.py`).
 
 - **ImageMagick** (`magick`/`mogrify`) — normalize textures to 8-bit sRGB; crop thumbnails.
 - **`ktx`** (KTX-Software **≥ v5**, `ktx create` — `toktx` was removed in v5) — KTX2/Basis encoding.
 - **`gltfpack`** (meshoptimizer) — OBJ → decimated, meshopt-compressed geometry glb.
 - **`node`** (20+) + the bundled `@gltf-transform/core` helper (`preppy/node/embed.mjs`) — embeds KTX2 into the geometry glb. Install its deps once: `npm install --prefix preppy/node`.
-- Legacy only: `obj2gltf` + `gltf-pipeline` (for `voyager-obj2glb`).
+- Legacy only: `obj2gltf` + `gltf-pipeline` (for `preppy-obj2glb`).
 - Optional: `pymeshlab` (`.[validate]`) for the Hausdorff decimation gate.
 - Optional: `trimesh` + `pyrender` (`.[preview]`) for the rendered model-preview thumbnail (`preview.py`). Needs an offscreen GL backend; when absent the thumbnail falls back to a texture center-crop.
 
@@ -28,13 +28,13 @@ Python deps (`natsort`, `Pillow`, `numpy`, `scipy`, `tqdm`) install via `pip ins
 pip install -e '.[validate,test]'       # editable install + optional pymeshlab/pytest
 npm install --prefix preppy/node        # KTX2 embed helper deps (once)
 
-voyager-preppy -i config.json -o out/   # batch: variants → self-contained glbs + manifest.json + index.json
-voyager-check-tools                     # report external toolchain status
-voyager-obj2glb -i mesh.obj -o mesh.glb # LEGACY single OBJ → Draco GLB (deprecated)
-voyager-merge-items a.json b.json -o merged.json  # LEGACY items.json merge (deprecated)
+preppy -i config.json -o out/           # batch: variants → self-contained glbs + manifest.json + index.json
+preppy-check-tools                       # report external toolchain status
+preppy-obj2glb -i mesh.obj -o mesh.glb  # LEGACY single OBJ → Draco GLB (deprecated)
+preppy-merge-items a.json b.json -o merged.json   # LEGACY items.json merge (deprecated)
 ```
 
-There **is** a test suite now (`tests/`, pytest): `python -m pytest tests/`. Tests that need the external tools (or pymeshlab) skip cleanly when they're absent, so a bare run still covers the pure logic. CI (`.gitlab-ci.yml`) runs the suite across Python 3.11–3.13 plus the `voyager-preppy -h` smoke test, with a manual, non-blocking `integration` job that exercises the full external toolchain. The `singularity/dri-voyager-preppy.def` bundles all deps for reproducible/HPC runs.
+There **is** a test suite now (`tests/`, pytest): `python -m pytest tests/`. Tests that need the external tools (or pymeshlab) skip cleanly when they're absent, so a bare run still covers the pure logic. CI (`.github/workflows/ci.yml`, GitHub Actions) runs the suite across Python 3.11–3.13 plus the `preppy -h` smoke test, with a manual, non-blocking `integration` job that exercises the full external toolchain. A second workflow (`.github/workflows/build_docker.yml`) builds and publishes the multi-arch Docker image to `ghcr.io/educelab/preppy`. The `Dockerfile` (and `singularity/preppy.def`) bundle all deps for reproducible/container/HPC runs.
 
 ## Architecture
 
@@ -52,7 +52,7 @@ Console entrypoints in `preppy/apps/` are thin argparse CLIs over the library mo
 
 ### Input config format
 
-The `voyager-preppy` input JSON is a flat array of **objects**, validated by `templates/prep-models.schema.json` (examples: `prep-models-example.json`, `mvs-example.json`):
+The `preppy` input JSON is a flat array of **objects**, validated by `templates/prep-models.schema.json` (examples: `prep-models-example.json`, `mvs-example.json`):
 
 - An **object** needs `id`, `title`, and a `variants` array. Optional `prefix` (output folder/file prefix; defaults to `id`), `titles`, `inventory`, `description`, `credit`, `date`, `units` (default `cm`), `nodataFill`.
 - A **variant** needs `suffix` (stable key: names the file + is the manifest variant `id`) and `obj`. Optional `label`, `default`, `nodataFill` (resolved variant ?? object ?? CLI), and per-variant `credit`/`date`/`method`/`description`. Textures are resolved transitively from the OBJ's `map_Kd`. Relative `obj` paths resolve against `--data-root` (default CWD), not the config file's location.

@@ -6,7 +6,7 @@ From: python:3.11-slim
   OS Debian
 
 %files
-  /tmp/dri-voyager-preppy /usr/local/educelab/dri-voyager-preppy
+  /tmp/preppy /usr/local/educelab/preppy
 
 %post -c /bin/bash
   set -e
@@ -48,13 +48,13 @@ From: python:3.11-slim
   npm install -g gltfpack obj2gltf gltf-pipeline
 
   # Install the embed helper's npm deps (@gltf-transform/core + meshoptimizer)
-  npm install --prefix /usr/local/educelab/dri-voyager-preppy/preppy/node
+  npm install --prefix /usr/local/educelab/preppy/preppy/node
 
   # Create a venv for this project
-  python3 -m venv /usr/local/educelab/dri-voyager-preppy/.venv/
+  python3 -m venv /usr/local/educelab/preppy/.venv/
 
   # Activate virtualenv
-  source /usr/local/educelab/dri-voyager-preppy/.venv/bin/activate
+  source /usr/local/educelab/preppy/.venv/bin/activate
 
   # Update pip
   python3 -m pip install --upgrade pip wheel setuptools
@@ -63,14 +63,14 @@ From: python:3.11-slim
   # thumbnail is a rendered model preview. pyrender renders offscreen via OSMesa
   # (libosmesa6, above) with PYOPENGL_PLATFORM=osmesa set in %environment; if the
   # GL backend fails on a given node the thumbnail falls back to a texture crop.
-  python3 -m pip install --editable '/usr/local/educelab/dri-voyager-preppy[preview]'
+  python3 -m pip install --editable '/usr/local/educelab/preppy[preview]'
 
   # Make writable
   echo "Cleaning up installation directory..."
   chmod --recursive a+rw /usr/local/educelab/
   git config --global credential.helper cache
   git config --global credential.helper 'cache --timeout=3600'
-  git config --global --add safe.directory /usr/local/educelab/dri-voyager-preppy/
+  git config --global --add safe.directory /usr/local/educelab/preppy/
 
 %environment
   # Headless offscreen GL backend for the pyrender model-preview thumbnail.
@@ -83,7 +83,7 @@ From: python:3.11-slim
       exit 1
   fi
 
-  source /usr/local/educelab/dri-voyager-preppy/.venv/bin/activate
+  source /usr/local/educelab/preppy/.venv/bin/activate
   exec "$@"
 
 %help

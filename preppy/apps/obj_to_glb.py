@@ -9,7 +9,7 @@ import preppy.convert as convert
 
 
 def main():
-    print('[deprecated] voyager-obj2glb uses the legacy obj2gltf + gltf-pipeline '
+    print('[deprecated] preppy-obj2glb uses the legacy obj2gltf + gltf-pipeline '
           'path, which will be removed once the meshopt/KTX2 delivery pipeline '
           'lands.', file=sys.stderr)
 

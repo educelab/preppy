@@ -1,4 +1,4 @@
-"""End-to-end smoke test: run the ``voyager-preppy`` orchestrator over a trimmed,
+"""End-to-end smoke test: run the ``preppy`` orchestrator over a trimmed,
 synthetic multi-material sample (standing in for the large `mvs` data, which
 can't be committed) and assert the emitted manifest + asset set.
 
@@ -84,7 +84,7 @@ def sample(tmp_path):
 def _run(config_path, out_dir, *extra):
     # The sample's obj paths are relative to the config's dir, so point
     # --data-root there (default is the CWD).
-    argv = ['voyager-preppy', '-i', str(config_path), '-o', str(out_dir),
+    argv = ['preppy', '-i', str(config_path), '-o', str(out_dir),
             '--data-root', str(config_path.parent), *extra]
     from preppy.apps import file_prep
     old = sys.argv
