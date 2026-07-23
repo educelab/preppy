@@ -108,10 +108,20 @@ def obj_to_geometry_glb(obj: PathLike, out: PathLike, *,
     return out
 
 
+def _is_vn_line(line: str) -> bool:
+    """True if ``line`` is a vertex-normal (``vn``) declaration.
+
+    Keys on the first whitespace-delimited token, so it tolerates *any* separator
+    after the keyword — a tab or multiple spaces, not just the single space a
+    naive ``startswith('vn ')`` assumes (the Wavefront grammar allows either).
+    """
+    return line.split(maxsplit=1)[:1] == ['vn']
+
+
 def _obj_has_normals(obj: PathLike) -> bool:
     """Whether the OBJ declares any vertex normals (``vn`` lines)."""
     with Path(obj).open() as f:
-        return any(line.startswith('vn ') for line in f)
+        return any(_is_vn_line(line) for line in f)
 
 
 def bake_normals(obj_in: PathLike, obj_out: PathLike) -> Path:
@@ -177,7 +187,7 @@ def bake_normals(obj_in: PathLike, obj_out: PathLike) -> Path:
             if line.startswith('v '):
                 nverts += 1
                 out.write(line + '\n')
-            elif line.startswith('vn '):
+            elif _is_vn_line(line):
                 continue  # drop source normals; the baked block replaces them
             elif line.startswith('f '):
                 if not wrote_normals:  # emit the baked vn block just before first use

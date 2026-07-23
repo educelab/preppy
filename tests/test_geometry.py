@@ -123,6 +123,35 @@ def test_bake_normals_strips_existing_vn(tmp_path):
     assert text.index('vn ') < text.index('f ')
 
 
+def test_is_vn_line_tolerates_whitespace():
+    # Keyword may be followed by a tab or extra spaces, not just one space.
+    assert geometry._is_vn_line('vn 0 0 1')
+    assert geometry._is_vn_line('vn\t0 0 1')
+    assert geometry._is_vn_line('vn  0 0 1\n')
+    # Not a vn line: vertex, uv, or a token that merely starts with "vn".
+    assert not geometry._is_vn_line('v 0 0 0')
+    assert not geometry._is_vn_line('vt 0 0')
+    assert not geometry._is_vn_line('vnfoo 0 0 1')
+    assert not geometry._is_vn_line('')
+
+
+def test_bake_normals_strips_tab_delimited_vn(tmp_path):
+    # A source whose vn block uses TABs must still be detected + stripped, else
+    # the source normals survive alongside the baked block and misalign indices.
+    obj = tmp_path / 'm.obj'
+    obj.write_text(
+        'v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n'
+        'vn\t0 0 -1\nvn\t0 0 -1\nvn\t0 0 -1\nvn\t0 0 -1\n'  # tab-separated, bogus
+        'f 1//1 2//2 3//3\n'
+        'f 1//1 3//3 4//4\n')
+    assert geometry._obj_has_normals(obj)  # detected despite the tab
+    out = geometry.bake_normals(obj, tmp_path / 'm.normals.obj')
+    text = out.read_text()
+    assert '-1.000000' not in text            # source -z normals gone
+    assert text.count('vn ') == 4             # exactly one baked block
+    assert text.count('vn 0.000000 0.000000 1.000000\n') == 4
+
+
 def test_bake_normals_negative_indices(tmp_path):
     # Same flat quad, but faces use OBJ relative (negative) indices.
     obj = tmp_path / 'm.obj'
