@@ -35,6 +35,22 @@ def _backend_available() -> bool:
         return False
 
 
+def _magick_available() -> bool:
+    try:
+        sp.run(['magick', '-version'], check=True, capture_output=True)
+        return True
+    except Exception:
+        return False
+
+
+#: Skip tests that build/crop textures with ImageMagick when `magick` is absent,
+#: honoring the "bare runner covers pure logic" contract; the full texture path
+#: is exercised by the manual `integration` CI job (which installs ImageMagick).
+requires_magick = pytest.mark.skipif(
+    not _magick_available(),
+    reason='ImageMagick (magick) not available to build/crop test textures')
+
+
 def _write_textured_obj(tmp_path: Path) -> Path:
     """A 2-material OBJ + normalized PNGs; MTL references source names that do
     NOT exist on disk, so a successful render proves the resolver swapped in the
@@ -59,14 +75,10 @@ def _write_textured_obj(tmp_path: Path) -> Path:
     return src
 
 
+@requires_magick
 @pytest.mark.skipif(not _backend_available(),
                     reason='preview extra (trimesh/pyrender) not installed')
 def test_render_preview_writes_jpeg_from_normalized_textures(tmp_path):
-    try:
-        sp.run(['magick', '-version'], check=True, capture_output=True)
-    except Exception:
-        pytest.skip('ImageMagick not available to build the test textures')
-
     src = _write_textured_obj(tmp_path)
     # source_*.png deliberately absent; only norm_*.png exist.
     textures = {'source_00.png': src / 'norm_00.png',
@@ -174,6 +186,7 @@ def test_check_tools_rejects_unknown_target(monkeypatch):
         _run_check_tools(monkeypatch, ['bogus'])
 
 
+@requires_magick
 @pytest.mark.skipif(not _backend_available(),
                     reason='preview extra (trimesh/pyrender) not installed')
 def test_render_preview_survives_mixed_face_mesh(tmp_path):
@@ -200,6 +213,7 @@ def _min_opts(**over) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
+@requires_magick
 def test_render_thumbnail_falls_back_to_texture_crop(tmp_path, monkeypatch):
     """When the preview backend is unavailable, ``_render_thumbnail`` logs and
     falls back to the texture center-crop instead of aborting the run."""
@@ -220,6 +234,7 @@ def test_render_thumbnail_falls_back_to_texture_crop(tmp_path, monkeypatch):
     assert dst.is_file()  # produced by the texture-crop fallback
 
 
+@requires_magick
 def test_render_thumbnail_texture_mode_skips_render(tmp_path, monkeypatch):
     """``--thumbnail-mode texture`` must not invoke the renderer at all."""
     from preppy.apps import file_prep
