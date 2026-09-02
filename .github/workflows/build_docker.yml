@@ -20,6 +20,11 @@ jobs:
   build:
     name: Build and push
     runs-on: ubuntu-latest
+    env:
+      # Only release refs publish: `develop` (the `edge` tag) and `v*` tags.
+      # Any other ref (a feature branch, a manual dispatch elsewhere) builds
+      # as a check and skips the push.
+      PUSH: ${{ github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - name: Clean up disk space
         run: |
@@ -51,6 +56,7 @@ jobs:
             type=edge
 
       - name: Login to GitHub Container Registry
+        if: env.PUSH == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -68,7 +74,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ env.PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
