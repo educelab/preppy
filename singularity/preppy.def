@@ -34,7 +34,7 @@ From: python:3.11-slim
   # Install KTX-Software (>= v5, provides `ktx create`). toktx was removed in v5.
   # Pin a v5 release .deb; update KTX_VERSION / asset name from
   # https://github.com/KhronosGroup/KTX-Software/releases as needed.
-  KTX_VERSION=5.0.0
+  KTX_VERSION=5.0.0-rc2
   curl -fsSL -o /tmp/ktx.deb \
       "https://github.com/KhronosGroup/KTX-Software/releases/download/v${KTX_VERSION}/KTX-Software-${KTX_VERSION}-Linux-x86_64.deb"
   DEBIAN_FRONTEND=noninteractive apt install -y /tmp/ktx.deb

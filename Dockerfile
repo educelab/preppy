@@ -48,11 +48,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && rm -rf /var/lib/apt/lists/* \
     && node -v
 
-# KTX-Software (provides `ktx create`; `toktx` is not used). The .def targeted a
-# v5 that is not yet released as a final tag, so pin the latest stable that ships
-# `ktx create` for both amd64 and arm64. Bump when v5.0.0 ships.
+# KTX-Software (provides `ktx create`; `toktx` was removed in v5). We require
+# >= v5, which has no final tag yet, so pin the newest v5 pre-release shipping
+# both amd64 and arm64 .debs. Bump to 5.0.0 when it ships.
 # Assets: https://github.com/KhronosGroup/KTX-Software/releases
-ARG KTX_VERSION=4.4.2
+ARG KTX_VERSION=5.0.0-rc2
 RUN set -eux; \
     case "${TARGETARCH}" in \
         amd64) ktx_arch="x86_64" ;; \
