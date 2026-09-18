@@ -42,6 +42,25 @@ RUN apt-get update \
         libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
+# ImageMagick resource limits. The stock Debian policy.xml caps the pixel cache
+# (1GiB memory / 2GiB map / 2GiB disk, 256MP area) well below our gigapixel
+# textures: a 16384x16384 source is 268MP, so it spills to disk and then dies
+# with "cache resources exhausted". Policy values are per-instance *maximums*,
+# so a deployment can still tighten them at runtime via MAGICK_MEMORY_LIMIT and
+# friends. Disk spill lands in MAGICK_TMPDIR (else TMPDIR, else /tmp) — point
+# that at scratch, not a small tmpfs, when processing 32K sources.
+RUN set -eux; \
+    policy="$(ls /etc/ImageMagick-*/policy.xml)"; \
+    sed -i -E \
+        -e 's|(name="memory" value=)"[^"]*"|\1"16GiB"|' \
+        -e 's|(name="map" value=)"[^"]*"|\1"32GiB"|' \
+        -e 's|(name="disk" value=)"[^"]*"|\1"128GiB"|' \
+        -e 's|(name="area" value=)"[^"]*"|\1"4GP"|' \
+        -e 's|(name="width" value=)"[^"]*"|\1"128KP"|' \
+        -e 's|(name="height" value=)"[^"]*"|\1"128KP"|' \
+        "$policy"; \
+    identify -list resource
+
 # Node.js (24 LTS) for gltfpack and the KTX2 embed helper.
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \

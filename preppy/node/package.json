@@ -1,6 +1,6 @@
 {
   "name": "preppy-node",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "type": "module",
   "description": "Node helper (embed.mjs) that embeds KTX2 textures into the meshopt geometry glb for preppy. Run `npm install` here before using the delivery pipeline.",
