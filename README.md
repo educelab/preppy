@@ -162,6 +162,23 @@ To build it locally (see [`Dockerfile`](Dockerfile)):
 docker build -t preppy .
 ```
 
+### ImageMagick resource limits
+
+Distro ImageMagick ships a `policy.xml` that caps the pixel cache (Debian: 1GiB
+memory / 2GiB map / 2GiB disk, 256MP area). Our textures blow straight through
+it — a 16384×16384 source is 268MP, so `magick` spills to disk and then aborts
+with `cache resources exhausted`. The container images raise those ceilings
+(16GiB memory / 32GiB map / 128GiB disk, 4GP area, 128KP width/height); a
+non-container install on Linux needs the same edit to
+`/etc/ImageMagick-*/policy.xml`. Check the effective limits with
+`identify -list resource`.
+
+Policy values are per-instance *maximums*, so a run can only tighten them:
+`MAGICK_MEMORY_LIMIT` / `MAGICK_MAP_LIMIT` / `MAGICK_DISK_LIMIT` lower the
+ceiling on a RAM-constrained node. Anything spilled past the memory limit is
+written to `MAGICK_TMPDIR` (else `TMPDIR`, else `/tmp`) — point that at scratch,
+not a small tmpfs, when processing 32K sources.
+
 > The `<dri-viewer>` web component that consumes this pipeline's output lives in a
 > separate repository (`dri-voyager`), with its own TypeScript/Vitest/Playwright
 > suite. This repo is the model-preparation pipeline only.
