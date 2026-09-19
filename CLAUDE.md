@@ -31,6 +31,7 @@ npm install --prefix preppy/node        # KTX2 embed helper deps (once)
 preppy -i config.json -o out/           # batch: variants → self-contained glbs + manifest.json + index.json
 preppy-check-tools                       # report external toolchain status
 preppy-obj2glb -i mesh.obj -o mesh.glb  # LEGACY single OBJ → Draco GLB (deprecated)
+preppy-merge-items out1/ out2/ -o merged/          # merge output dirs (assets + index.json)
 preppy-merge-items a.json b.json -o merged.json   # LEGACY items.json merge (deprecated)
 ```
 
@@ -48,6 +49,7 @@ Console entrypoints in `preppy/apps/` are thin argparse CLIs over the library mo
 - **`cache.py`** — content hash over **inputs + config + tool versions** (never the output glb — basis encoding is non-deterministic), `hashed_name()`, and `prune()`.
 - **`manifest.py`** (replaced `voyager.py`) — pure builders for the per-object `manifest.json` (flat `variants[] {id,label,uri,default}` + object metadata, `units:"cm"`, per-variant overrides) and the optional `index.json`.
 - **`apps/file_prep.py`** — the orchestrator. Per object, per **variant** (no grouping): resolve texture(s) → normalize + encode each → gltfpack → optional Hausdorff gate → embed all by name → one self-contained glb → manifest entry. Emits `manifest.json` per object + a top-level `index.json`. The default-variant thumbnail is a rendered model preview (`preview.render_preview`, `_render_thumbnail` helper) that falls back to a texture crop (`--thumbnail-mode texture`, or automatically when the render toolchain is unavailable).
+- **`apps/merge_items.py`** — merges separately-built catalogs. Input shape is auto-detected: output directories (or their `index.json`) are merged by copying each per-object subdirectory into `-o` and combining the `index.json` `objects[]` (merge key is object `id`; collisions are planned up front so nothing is copied before the whole merge validates). Plain `.json` inputs take the deprecated `items.json` document-list path.
 - **`convert.py` + `apps/obj_to_glb.py`** — the deprecated legacy OBJ→Draco-GLB path (kept until removed).
 
 ### Input config format
