@@ -160,7 +160,9 @@ mogrify — cheap, no offscreen GL. (Loose end: rendered 3D thumbs later.)
 
 ### A6. CLI
 Keep console-script entry; add `--ktx2-mode {uastc,etc1s}`, `--decimate-error`,
-`--no-decimate`, keep `--uri`, `--keep-tmp`. `merge_items` → `merge_index` later.
+`--no-decimate`, keep `--uri`, `--keep-tmp`. `merge_items` keeps its name (no
+rename to `merge_index`); it gained the output-directory merge alongside the
+legacy `items.json` one.
 
 ---
 
