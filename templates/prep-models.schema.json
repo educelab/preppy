@@ -53,7 +53,11 @@
           "minProperties": 1
         },
         "inventory": {
-          "description": "Inventory / shelf number.",
+          "description": "Inventory / shelf number. Also copied into the object's index.json entry, where a host UI can group by it.",
+          "type": "string"
+        },
+        "sort": {
+          "description": "Optional ordering key for this object in index.json (host listings only; not copied into the manifest).",
           "type": "string"
         },
         "description": { "$ref": "#/$defs/localizedString" },

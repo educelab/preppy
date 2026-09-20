@@ -115,6 +115,8 @@ flat listing for host pages only.
 // index.json (optional — host archive UI only)
 { "objects": [
     { "id":"PHerc1061Cr05", "title":"P.Herc. 1061, Cr. 5",
+      "inventory":"P.Herc. 1061",       // optional: group key for a host listing
+      "sort":"1061-05",                 // optional: explicit ordering key
       "manifest":"PHerc1061Cr05/manifest.json",
       "thumb":"PHerc1061Cr05/PHerc1061Cr05_thumb.jpg" } ] }
 

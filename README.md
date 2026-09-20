@@ -82,7 +82,12 @@ out/
 
 Asset filenames carry an inputs+config content hash by default (served
 `immutable`); `manifest.json` / `index.json` keep stable names and hold the
-current hashed URIs. Useful flags:
+current hashed URIs. Each `index.json` entry is `{id, title, manifest}` plus
+the object's `inventory` and `sort` when the config sets them and `thumb` when
+one was built — enough for a host to build a grouped, ordered listing from the
+catalog alone, without opening every manifest.
+
+Useful flags:
 
 | Flag | Effect |
 | --- | --- |

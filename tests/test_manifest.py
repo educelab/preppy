@@ -97,6 +97,17 @@ def test_index_entry_and_build_index():
     assert idx == {'objects': [e]}
 
 
+def test_index_entry_group_metadata():
+    """inventory/sort let a host group and order a catalog without opening
+    every manifest; both are omitted when unset."""
+    e = manifest.index_entry('OBJ', 'Cr. 5', 'OBJ/manifest.json',
+                             inventory='P.Herc. 1061', sort='0005')
+    assert e['inventory'] == 'P.Herc. 1061'
+    assert e['sort'] == '0005'
+    plain = manifest.index_entry('OBJ', 'Cr. 5', 'OBJ/manifest.json')
+    assert 'inventory' not in plain and 'sort' not in plain
+
+
 def test_write_json_roundtrip(tmp_path):
     data = {'id': 'OBJ', 'variants': [{'id': 'rgb'}]}
     out = manifest.write_json(data, tmp_path / 'sub' / 'manifest.json')
