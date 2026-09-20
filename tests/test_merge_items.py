@@ -125,6 +125,91 @@ def test_merge_output_dirs_replaces_stale_object_dir(tmp_path):
     assert (stale / 'OBJ_rgb.abc12345.glb').is_file()
 
 
+def test_index_root_accepts_dir_or_index_file(tmp_path):
+    assert merge_items.index_root(tmp_path / 'cat') == tmp_path / 'cat'
+    assert merge_items.index_root(tmp_path / 'cat' / 'index.json') == \
+        tmp_path / 'cat'
+
+
+def make_catalog(root, ids):
+    """Build a merged catalog holding one object per id."""
+    sources = [make_output_dir(root / f'src_{oid}', oid) for oid in ids]
+    merge_items.merge_output_dirs(sources, root / 'catalog')
+    return root / 'catalog'
+
+
+def test_update_replaces_only_the_named_object(tmp_path):
+    catalog = make_catalog(tmp_path, ['KEEP', 'STALE'])
+    (catalog / 'KEEP' / 'untouched.txt').write_text('still here')
+    new = make_output_dir(tmp_path / 'new', 'STALE', 'Rebuilt')
+    (new / 'STALE' / 'STALE_rgb.abc12345.glb').write_bytes(b'newer')
+
+    entries = merge_items.merge_output_dirs([new], catalog, base=catalog)
+
+    # The base object keeps its entry, its position, and its assets.
+    assert [e['id'] for e in entries] == ['KEEP', 'STALE']
+    assert (catalog / 'KEEP' / 'untouched.txt').is_file()
+    # The redeclared object was replaced without --overwrite.
+    assert entries[1]['title'] == 'Rebuilt'
+    assert (catalog / 'STALE' / 'STALE_rgb.abc12345.glb').read_bytes() == \
+        b'newer'
+    index = json.loads((catalog / 'index.json').read_text())
+    assert [o['id'] for o in index['objects']] == ['KEEP', 'STALE']
+
+
+def test_update_appends_new_objects(tmp_path):
+    catalog = make_catalog(tmp_path, ['A'])
+    new = make_output_dir(tmp_path / 'new', 'B')
+
+    entries = merge_items.merge_output_dirs([new], catalog, base=catalog)
+
+    assert [e['id'] for e in entries] == ['A', 'B']
+    assert (catalog / 'B' / 'manifest.json').is_file()
+
+
+def test_update_still_refuses_duplicates_among_sources(tmp_path):
+    catalog = make_catalog(tmp_path, ['OBJ'])
+    a = make_output_dir(tmp_path / 'a', 'OBJ')
+    b = make_output_dir(tmp_path / 'b', 'OBJ')
+    with pytest.raises(ValueError, match='duplicate object'):
+        merge_items.merge_output_dirs([a, b], catalog, base=catalog)
+
+
+def test_update_refuses_subdir_claimed_by_another_object(tmp_path):
+    catalog = make_catalog(tmp_path, ['ONE'])
+    other = make_output_dir(tmp_path / 'other', 'TWO', subdir='ONE')
+    with pytest.raises(ValueError, match='both use subdirectory'):
+        merge_items.merge_output_dirs([other], catalog, base=catalog)
+
+
+def test_index_only_merges_listings_without_assets(tmp_path):
+    # A catalog whose assets are elsewhere (a remote host): only its index.json
+    # is reachable, and no source directory is copied.
+    remote = tmp_path / 'remote'
+    remote.mkdir()
+    (remote / 'index.json').write_text(json.dumps(
+        {'objects': [{'id': 'A', 'title': 'A',
+                      'manifest': 'A/manifest.json'}]}))
+    new = make_output_dir(tmp_path / 'new', 'B')
+
+    entries = merge_items.merge_output_dirs([new], remote, base=remote,
+                                            index_only=True)
+
+    assert [e['id'] for e in entries] == ['A', 'B']
+    assert not (remote / 'B').exists()
+    index = json.loads((remote / 'index.json').read_text())
+    assert [o['id'] for o in index['objects']] == ['A', 'B']
+
+
+def test_index_only_accepts_an_index_file_as_the_source(tmp_path):
+    a = make_output_dir(tmp_path / 'a', 'A')
+    out = tmp_path / 'listing'
+    entries = merge_items.merge_output_dirs([a / 'index.json'], out,
+                                            index_only=True)
+    assert [e['id'] for e in entries] == ['A']
+    assert not (out / 'A').exists()
+
+
 def test_merge_duplicates_legacy_items():
     data = [{'title': 'A', 'document': 'a.json'},
             {'title': 'A', 'document': 'a.json'},

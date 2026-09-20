@@ -32,6 +32,7 @@ preppy -i config.json -o out/           # batch: variants → self-contained glb
 preppy-check-tools                       # report external toolchain status
 preppy-obj2glb -i mesh.obj -o mesh.glb  # LEGACY single OBJ → Draco GLB (deprecated)
 preppy-merge-items out1/ out2/ -o merged/          # merge output dirs (assets + index.json)
+preppy-merge-items new/ --update catalog/         # incremental merge into an existing catalog
 preppy-merge-items a.json b.json -o merged.json   # LEGACY items.json merge (deprecated)
 ```
 
@@ -49,7 +50,7 @@ Console entrypoints in `preppy/apps/` are thin argparse CLIs over the library mo
 - **`cache.py`** — content hash over **inputs + config + tool versions** (never the output glb — basis encoding is non-deterministic), `hashed_name()`, and `prune()`.
 - **`manifest.py`** (replaced `voyager.py`) — pure builders for the per-object `manifest.json` (flat `variants[] {id,label,uri,default}` + object metadata, `units:"cm"`, per-variant overrides) and the optional `index.json` (entries carry `inventory`/`sort` when set, so a host can group + order a catalog without opening every manifest). **`index.json`'s shape has a second producer outside this repo** — `acquisition-workflow`'s `pipeline/pipeline_deploy.py` writes it from its own deploy state (it can't import preppy, which lives in a container); a change to `build_index`/`index_entry` has to be mirrored there and nothing fails loudly if it isn't.
 - **`apps/file_prep.py`** — the orchestrator. Per object, per **variant** (no grouping): resolve texture(s) → normalize + encode each → gltfpack → optional Hausdorff gate → embed all by name → one self-contained glb → manifest entry. Emits `manifest.json` per object + a top-level `index.json`. The default-variant thumbnail is a rendered model preview (`preview.render_preview`, `_render_thumbnail` helper) that falls back to a texture crop (`--thumbnail-mode texture`, or automatically when the render toolchain is unavailable).
-- **`apps/merge_items.py`** — merges separately-built catalogs. Input shape is auto-detected: output directories (or their `index.json`) are merged by copying each per-object subdirectory into `-o` and combining the `index.json` `objects[]` (merge key is object `id`; collisions are planned up front so nothing is copied before the whole merge validates). Plain `.json` inputs take the deprecated `items.json` document-list path.
+- **`apps/merge_items.py`** — merges separately-built catalogs. Input shape is auto-detected: output directories (or their `index.json`) are merged by copying each per-object subdirectory into `-o` and combining the `index.json` `objects[]` (merge key is object `id`; collisions are planned up front so nothing is copied before the whole merge validates). `--update CATALOG` seeds the plan from an existing catalog and rewrites it in place, copying only the named sources' objects (a base object a source redeclares is replaced without `--overwrite`); `--index-only` merges the listings and copies nothing, for a catalog whose assets aren't reachable. Plain `.json` inputs take the deprecated `items.json` document-list path.
 - **`convert.py` + `apps/obj_to_glb.py`** — the deprecated legacy OBJ→Draco-GLB path (kept until removed).
 
 ### Input config format

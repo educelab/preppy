@@ -164,7 +164,8 @@ mogrify — cheap, no offscreen GL. (Loose end: rendered 3D thumbs later.)
 Keep console-script entry; add `--ktx2-mode {uastc,etc1s}`, `--decimate-error`,
 `--no-decimate`, keep `--uri`, `--keep-tmp`. `merge_items` keeps its name (no
 rename to `merge_index`); it gained the output-directory merge alongside the
-legacy `items.json` one.
+legacy `items.json` one, plus `--update CATALOG` (merge in place, touching only
+the named objects) and `--index-only` (listings without assets).
 
 ---
 

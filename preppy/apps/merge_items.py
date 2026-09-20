@@ -5,6 +5,8 @@ Two input shapes, auto-detected:
 * **output directories** (or their ``index.json``) — each per-object
   subdirectory is copied into the output directory and the ``index.json``
   ``objects[]`` lists are merged into one. Object ``id`` is the merge key.
+  ``--update`` merges into an existing catalog in place (only the named
+  sources move); ``--index-only`` merges the listings and copies nothing.
 * **legacy ``items.json`` files** — the deprecated Voyager document list, merged
   and de-duplicated in place (no assets involved).
 """
@@ -89,6 +91,15 @@ def is_index_input(path):
     return path.is_dir() or path.name == INDEX_NAME
 
 
+def index_root(path):
+    """The directory an index's ``manifest``/``thumb`` URIs resolve against.
+
+    Accepts either the output directory or its ``index.json``.
+    """
+    path = Path(path)
+    return path.parent if path.name == INDEX_NAME else path
+
+
 def load_index(path):
     """Load an output directory's listing; return ``(root_dir, objects)``.
 
@@ -96,10 +107,10 @@ def load_index(path):
     ``root_dir`` is the directory the entries' ``manifest``/``thumb`` URIs are
     relative to.
     """
-    path = Path(path)
-    index = path / INDEX_NAME if path.is_dir() else path
+    root = index_root(path)
+    index = root / INDEX_NAME
     if not index.is_file():
-        raise FileNotFoundError(f"no '{INDEX_NAME}' in '{path}'")
+        raise FileNotFoundError(f"no '{INDEX_NAME}' in '{root}'")
 
     with index.open(encoding='utf8') as f:
         data = json.load(f)
@@ -119,16 +130,25 @@ def object_subdir(entry):
     return parts[0]
 
 
-def plan_merge(sources, *, overwrite=False):
+def plan_merge(sources, *, overwrite=False, base=None):
     """Resolve sources to a list of ``(src_dir, subdir_name, entry)`` to copy.
 
     Duplicate object ``id``s across sources are an error unless ``overwrite``,
     in which case the last source wins. Two different objects claiming the same
     subdirectory is always an error — one would clobber the other's assets.
+
+    ``base`` is an existing catalog seeding the merge (an incremental update):
+    its objects are planned with a ``src_dir`` of ``None`` — already in place,
+    nothing to copy — and keep their position in the listing. A source
+    redeclaring one replaces it without ``overwrite``; that is the point.
     """
     planned = OrderedDict()
     claimed = {}
-    for source in sources:
+    replaceable = set()
+
+    stages = [(base, True)] if base is not None else []
+    stages += [(source, False) for source in sources]
+    for source, is_base in stages:
         root, objects = load_index(source)
         for entry in objects:
             oid = entry.get('id')
@@ -141,13 +161,17 @@ def plan_merge(sources, *, overwrite=False):
                 raise ValueError(
                     f"objects '{owner}' and '{oid}' both use subdirectory "
                     f"'{subdir}'")
-            if oid in planned and not overwrite:
+            if oid in planned and oid not in replaceable and not overwrite:
                 raise ValueError(
                     f"duplicate object '{oid}' in '{root}'; pass --overwrite "
                     f'to let the last source win')
 
             claimed[subdir] = oid
-            planned[oid] = (root / subdir, subdir, entry)
+            planned[oid] = (None if is_base else root / subdir, subdir, entry)
+            if is_base:
+                replaceable.add(oid)
+            else:
+                replaceable.discard(oid)
     return list(planned.values())
 
 
@@ -158,22 +182,29 @@ def copy_object_dir(src, dst):
     shutil.copytree(src, dst)
 
 
-def merge_output_dirs(sources, out_dir, *, overwrite=False, sort_key=None):
+def merge_output_dirs(sources, out_dir, *, overwrite=False, sort_key=None,
+                      base=None, index_only=False):
     """Merge output directories into ``out_dir``; return the merged entries.
 
     Copies every object's subdirectory, then writes the combined
     ``index.json``. The plan is resolved up front, so a collision fails before
     anything is copied.
+
+    ``base`` (normally ``out_dir`` itself) makes this an incremental update:
+    only the sources' objects are copied and the rest of the catalog is left
+    alone. ``index_only`` merges the listings and copies nothing, for a catalog
+    whose assets are not reachable from here.
     """
     out_dir = Path(out_dir)
-    planned = plan_merge(sources, overwrite=overwrite)
+    planned = plan_merge(sources, overwrite=overwrite, base=base)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     entries = []
     for src, subdir, entry in planned:
-        if not src.is_dir():
-            raise FileNotFoundError(f"missing object directory '{src}'")
-        copy_object_dir(src, out_dir / subdir)
+        if src is not None and not index_only:
+            if not src.is_dir():
+                raise FileNotFoundError(f"missing object directory '{src}'")
+            copy_object_dir(src, out_dir / subdir)
         entries.append(entry)
 
     if sort_key is not None:
@@ -186,12 +217,15 @@ def merge_output_dirs(sources, out_dir, *, overwrite=False, sort_key=None):
 
 def merge_indexes(args):
     """``main`` handler for the output-directory merge."""
-    out_dir = Path(args.output_file or 'merged')
+    base = args.update
+    out_dir = index_root(base) if base else Path(args.output_file or 'merged')
     sort_key = args.sort_key if args.sort else None
-    entries = merge_output_dirs(args.items, out_dir,
-                                overwrite=args.overwrite, sort_key=sort_key)
-    print(f'Merged {len(args.items)} director(ies): '
-          f'{len(entries)} object(s) -> \'{out_dir}\'')
+    entries = merge_output_dirs(args.items, out_dir, overwrite=args.overwrite,
+                                sort_key=sort_key, base=base,
+                                index_only=args.index_only)
+    target = out_dir / INDEX_NAME if args.index_only else out_dir
+    print(f'{"Updated" if base else "Merged"} {len(args.items)} source(s): '
+          f'{len(entries)} object(s) -> \'{target}\'')
 
 
 def merge_legacy_items(args):
@@ -248,17 +282,31 @@ def main():
                         action=argparse.BooleanOptionalAction,
                         help='If enabled, sort the merged entries')
     parser.add_argument('--sort-key', default='title', type=str,
-                        choices=['title', 'id', 'document'],
+                        choices=['title', 'id', 'sort', 'inventory',
+                                 'document'],
                         help='Key to use when sorting the merged entries')
     parser.add_argument('--overwrite', default=False, action='store_true',
                         help='Directory merge: let the last source win when '
                              'two sources provide the same object id')
+    parser.add_argument('--update', metavar='CATALOG', type=str, default=None,
+                        help='Directory merge: merge the sources into an '
+                             'existing catalog (a directory or its '
+                             'index.json) in place, replacing only their '
+                             'objects and leaving the rest untouched')
+    parser.add_argument('--index-only', default=False, action='store_true',
+                        help='Directory merge: merge the index.json listings '
+                             'without copying any assets')
     parser.add_argument('--merge-duplicates', default=True,
                         action=argparse.BooleanOptionalAction,
                         help='items.json merge: merge duplicate entries '
                              '(title and document match)')
     args = parser.parse_args()
 
+    if args.update and args.output_file:
+        parser.error('--update rewrites the catalog in place; -o is unused')
+
+    dir_only = (('--update', args.update), ('--index-only', args.index_only))
+    dir_flags = [flag for flag, given in dir_only if given]
     index_inputs = [is_index_input(i) for i in args.items]
     if all(index_inputs):
         try:
@@ -267,6 +315,9 @@ def main():
             parser.error(str(e))
     elif any(index_inputs):
         parser.error('cannot mix output directories and items.json files')
+    elif dir_flags:
+        parser.error(f'{", ".join(dir_flags)} only applies to an '
+                     f'output-directory merge')
     else:
         merge_legacy_items(args)
 
