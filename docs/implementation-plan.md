@@ -115,6 +115,8 @@ flat listing for host pages only.
 // index.json (optional — host archive UI only)
 { "objects": [
     { "id":"PHerc1061Cr05", "title":"P.Herc. 1061, Cr. 5",
+      "inventory":"P.Herc. 1061",       // optional: group key for a host listing
+      "sort":"1061-05",                 // optional: explicit ordering key
       "manifest":"PHerc1061Cr05/manifest.json",
       "thumb":"PHerc1061Cr05/PHerc1061Cr05_thumb.jpg" } ] }
 
@@ -160,7 +162,10 @@ mogrify — cheap, no offscreen GL. (Loose end: rendered 3D thumbs later.)
 
 ### A6. CLI
 Keep console-script entry; add `--ktx2-mode {uastc,etc1s}`, `--decimate-error`,
-`--no-decimate`, keep `--uri`, `--keep-tmp`. `merge_items` → `merge_index` later.
+`--no-decimate`, keep `--uri`, `--keep-tmp`. `merge_items` keeps its name (no
+rename to `merge_index`); it gained the output-directory merge alongside the
+legacy `items.json` one, plus `--update CATALOG` (merge in place, touching only
+the named objects) and `--index-only` (listings without assets).
 
 ---
 

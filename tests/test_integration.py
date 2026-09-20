@@ -68,6 +68,7 @@ def sample(tmp_path):
 
     config = [{
         'id': 'MVS', 'title': 'MVS Sample', 'inventory': 'MVS-1',
+        'sort': 'MVS-0001',
         'credit': '(c) UK', 'date': '2026-07-08', 'units': 'cm',
         'variants': [
             {'suffix': 'rgb', 'label': 'RGB', 'obj': 'src/mesh.obj',
@@ -103,6 +104,9 @@ def test_pipeline_emits_manifest_and_assets(sample):
     index = json.loads((out_dir / 'index.json').read_text())
     assert [o['id'] for o in index['objects']] == ['MVS']
     assert index['objects'][0]['thumb'] == 'MVS/MVS_thumb.jpg'
+    # Group/order metadata rides along so a host can build a grouped listing.
+    assert index['objects'][0]['inventory'] == 'MVS-1'
+    assert index['objects'][0]['sort'] == 'MVS-0001'
     assert (out_dir / 'MVS' / 'MVS_thumb.jpg').is_file()
 
     # per-object manifest shape.

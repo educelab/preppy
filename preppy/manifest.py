@@ -111,16 +111,36 @@ def build_manifest(object_cfg: Mapping,
 
 
 def index_entry(object_id: str, title: str, manifest_uri: str, *,
-                thumb: Optional[str] = None) -> Dict:
-    """Build one ``index.json`` ``objects[]`` entry (host archive UI only)."""
-    entry: Dict = {'id': object_id, 'title': title, 'manifest': manifest_uri}
+                thumb: Optional[str] = None,
+                inventory: Optional[str] = None,
+                sort: Optional[str] = None) -> Dict:
+    """Build one ``index.json`` ``objects[]`` entry (host archive UI only).
+
+    ``inventory`` (the object's group / shelf number) and ``sort`` (an explicit
+    ordering key) are omitted when unset. They carry enough object metadata for
+    a host to build a grouped, ordered listing from a catalog alone, instead of
+    opening every manifest.
+    """
+    entry: Dict = {'id': object_id, 'title': title}
+    if inventory is not None:
+        entry['inventory'] = inventory
+    if sort is not None:
+        entry['sort'] = sort
+    entry['manifest'] = manifest_uri
     if thumb is not None:
         entry['thumb'] = thumb
     return entry
 
 
 def build_index(objects: Sequence[Mapping]) -> Dict:
-    """Wrap ``index_entry`` results into the optional top-level ``index.json``."""
+    """Wrap ``index_entry`` results into the optional top-level ``index.json``.
+
+    Schema note: ``index.json`` has a second producer outside this repo.
+    ``acquisition-workflow``'s ``pipeline/pipeline_deploy.py`` writes the same
+    shape from its own deploy state (it cannot import preppy, which lives in a
+    container). A change to the entry shape has to be mirrored there, and
+    nothing fails loudly if it is not — the viewer just stops finding objects.
+    """
     return {'objects': list(objects)}
 
 

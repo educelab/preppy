@@ -82,7 +82,12 @@ out/
 
 Asset filenames carry an inputs+config content hash by default (served
 `immutable`); `manifest.json` / `index.json` keep stable names and hold the
-current hashed URIs. Useful flags:
+current hashed URIs. Each `index.json` entry is `{id, title, manifest}` plus
+the object's `inventory` and `sort` when the config sets them and `thumb` when
+one was built — enough for a host to build a grouped, ordered listing from the
+catalog alone, without opening every manifest.
+
+Useful flags:
 
 | Flag | Effect |
 | --- | --- |
@@ -109,6 +114,47 @@ missing the run falls back to the texture center-crop (`--thumbnail-mode
 texture`) automatically.
 
 Run `preppy -h` for the complete list.
+
+### Merging catalogs
+
+Objects built in separate runs (or on separate machines) combine into one
+servable catalog with `preppy-merge-items`. Each per-object subdirectory is
+copied into the output directory and the `index.json` listings are merged:
+
+```shell
+preppy-merge-items run1/ run2/ run3/ -o catalog/
+```
+
+Object `id` is the merge key, and relative `manifest`/`thumb` URIs are preserved
+by keeping each object's subdirectory name. Duplicate ids across sources are an
+error — pass `--overwrite` to let the last source win, which is how a rebuilt
+object replaces its older assets in place. The whole merge is validated before
+anything is copied, and `--no-sort` keeps source order instead of sorting by
+title (`--sort-key` also takes `id`, `sort` or `inventory`).
+
+To add a few objects to a catalog that already exists, `--update` merges them in
+place instead of rebuilding the whole thing — only the named sources' object
+directories are replaced, and every other object is left untouched:
+
+```shell
+preppy-merge-items rebuilt/ new/ --update catalog/
+```
+
+An object already in the catalog is replaced without `--overwrite` (that is what
+an update is); duplicate ids *among the sources* are still an error. The catalog
+is rewritten in place, so `-o` is unused.
+
+`--index-only` merges the listings and copies no assets, for a catalog whose
+assets live somewhere this machine cannot reach — point it at a copy of the
+remote `index.json`:
+
+```shell
+preppy-merge-items new/ --update ./catalog-index/index.json --index-only
+```
+
+Passing `.json` files instead of directories runs the deprecated `items.json`
+document-list merge (`--merge-duplicates`); `--update` and `--index-only` do not
+apply to it.
 
 ### Hosting / caching
 

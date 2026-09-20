@@ -275,7 +275,8 @@ def process_object(object_cfg: Mapping, *, data_root: Path, out_dir: Path,
 
     return manifest.index_entry(
         object_id, man.get('title', object_id),
-        manifest_uri=f'{prefix}/manifest.json', thumb=thumb_rel)
+        manifest_uri=f'{prefix}/manifest.json', thumb=thumb_rel,
+        inventory=man.get('inventory'), sort=object_cfg.get('sort'))
 
 
 def _build_parser() -> argparse.ArgumentParser:
