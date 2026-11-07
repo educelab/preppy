@@ -11,6 +11,7 @@ import pytest
 
 from preppy.apps import file_prep
 from preppy.geometry import HausdorffResult
+from preppy.texture import TextureCheckResult
 
 
 def test_resolve_obj_path_absolute_and_relative(tmp_path):
@@ -81,20 +82,28 @@ def _stub_opts(**over):
                 deviation_budget=0.05, deviation_budget_frac=None,
                 on_over_budget='fail', ktx2_mode='etc1s', hash_names=False,
                 tool_versions={}, uri='', smooth_normals=True,
-                force_smooth_normals=False)
+                force_smooth_normals=False, texture_check=True,
+                on_texture_defect='fail', allow_unpatched_ktx=False)
     base.update(over)
     return SimpleNamespace(**base)
 
 
-def _patch_chain(monkeypatch, tmp_path, validate_result):
+_TEXTURE_OK = TextureCheckResult(level_fractions=(0.0, 0.0))
+_TEXTURE_BAD = TextureCheckResult(level_fractions=(0.0, 0.0, 0.1146))
+
+
+def _patch_chain(monkeypatch, tmp_path, validate_result, texture_result=_TEXTURE_OK):
     """Stub every external step so process_variant runs toolless; validate()
-    returns the supplied HausdorffResult so only the gate logic is exercised."""
+    returns the supplied HausdorffResult (and validate_ktx2() the supplied
+    TextureCheckResult) so only the gate logic is exercised."""
     monkeypatch.setattr(file_prep, 'parse_material_textures',
                         lambda p: {'m': tmp_path / 't.png'})
     monkeypatch.setattr(file_prep.texture, 'normalize',
                         lambda img, **k: tmp_path / 'n.png')
     monkeypatch.setattr(file_prep.texture, 'encode_ktx2',
                         lambda png, **k: tmp_path / 'm.ktx2')
+    monkeypatch.setattr(file_prep.texture, 'validate_ktx2',
+                        lambda png, ktx2, **k: texture_result)
     monkeypatch.setattr(file_prep.geometry, 'obj_to_geometry_glb',
                         lambda obj, out, **k: Path(out))
     monkeypatch.setattr(file_prep.geometry, 'strip_textures',
@@ -127,6 +136,86 @@ def test_validate_gate_passes_within_budget(monkeypatch, tmp_path):
                                  bbox_diagonal=3.0, budget=0.05))
     res = _run_variant(tmp_path, _stub_opts())
     assert res['name'] == 'O_rgb.glb'
+
+
+_HAUSDORFF_OK = HausdorffResult(max_distance=0.01, mean=0.001, rms=0.002,
+                                bbox_diagonal=3.0, budget=0.05)
+
+
+def test_texture_gate_fails_on_defect(monkeypatch, tmp_path):
+    _patch_chain(monkeypatch, tmp_path, _HAUSDORFF_OK, _TEXTURE_BAD)
+    with pytest.raises(RuntimeError, match=r'mip level 2.*11\.46%'):
+        _run_variant(tmp_path, _stub_opts())
+
+
+def test_texture_gate_warn_continues(monkeypatch, tmp_path, caplog):
+    _patch_chain(monkeypatch, tmp_path, _HAUSDORFF_OK, _TEXTURE_BAD)
+    with caplog.at_level(logging.WARNING):
+        res = _run_variant(tmp_path, _stub_opts(on_texture_defect='warn'))
+    assert res['name'] == 'O_rgb.glb'
+    assert 'mip level 2' in caplog.text
+
+
+def test_texture_gate_can_be_disabled(monkeypatch, tmp_path):
+    _patch_chain(monkeypatch, tmp_path, _HAUSDORFF_OK, _TEXTURE_BAD)
+    res = _run_variant(tmp_path, _stub_opts(texture_check=False))
+    assert res['name'] == 'O_rgb.glb'
+
+
+def test_texture_gate_cli_defaults():
+    parser = file_prep._build_parser()
+    args = parser.parse_args(['-i', 'x.json'])
+    assert args.texture_check is True and args.on_texture_defect == 'fail'
+    args = parser.parse_args(['-i', 'x.json', '--no-texture-check',
+                              '--on-texture-defect', 'warn'])
+    assert args.texture_check is False and args.on_texture_defect == 'warn'
+
+
+def test_hash_name_tracks_ktx2_codec_options(monkeypatch, tmp_path):
+    # preppy#5: the --clevel fix changed the encode but not the hash, so the
+    # re-encoded asset would have kept its old `immutable` name. The hash must
+    # follow the codec options the encode actually uses.
+    _patch_chain(monkeypatch, tmp_path,
+                 HausdorffResult(max_distance=0.01, mean=0.001, rms=0.002,
+                                 bbox_diagonal=3.0, budget=0.05))
+    (tmp_path / 't.png').write_bytes(b'texture')
+    (tmp_path / 'x').write_text('newmtl m\nmap_Kd t.png\n')  # _run_variant's mtllib
+    opts = _stub_opts(hash_names=True)
+    current = _run_variant(tmp_path, opts)['name']
+    monkeypatch.setattr(file_prep.texture, 'ktx2_codec_args',
+                        lambda mode: ['--encode', 'basis-lz'])  # pre-#5 flags
+    previous = _run_variant(tmp_path, opts)['name']
+    assert current != previous
+
+
+def test_hash_name_tracks_ktx_patches(monkeypatch, tmp_path):
+    # The patched encoder changes the output but not `ktx --version`, so the
+    # declared patches must rename the `immutable` asset (preppy#5).
+    _patch_chain(monkeypatch, tmp_path, _HAUSDORFF_OK)
+    (tmp_path / 't.png').write_bytes(b'texture')
+    (tmp_path / 'x').write_text('newmtl m\nmap_Kd t.png\n')
+    opts = _stub_opts(hash_names=True)
+    monkeypatch.setenv(file_prep.tools.KTX_PATCHES_ENV, file_prep.texture.REQUIRED_KTX_PATCH)
+    patched = _run_variant(tmp_path, opts)['name']
+    monkeypatch.delenv(file_prep.tools.KTX_PATCHES_ENV)
+    unpatched = _run_variant(tmp_path, opts)['name']
+    assert patched != unpatched
+
+
+def test_allow_unpatched_ktx_cli_default():
+    parser = file_prep._build_parser()
+    assert parser.parse_args(['-i', 'x.json']).allow_unpatched_ktx is False
+    assert parser.parse_args(['-i', 'x.json', '--allow-unpatched-ktx']).allow_unpatched_ktx
+
+
+def test_main_refuses_unpatched_ktx_before_any_work(monkeypatch, tmp_path):
+    monkeypatch.delenv(file_prep.tools.KTX_PATCHES_ENV, raising=False)
+    monkeypatch.setattr('sys.argv', ['preppy', '-i', str(tmp_path / 'missing.json'),
+                                     '-o', str(tmp_path / 'out')])
+    # Fails on the encoder, not on the (missing) config: nothing has started.
+    with pytest.raises(SystemExit, match='preppy#5'):
+        file_prep.main()
+    assert not (tmp_path / 'out').exists()
 
 
 def test_validate_report_only_without_budget(monkeypatch, tmp_path):

@@ -6,6 +6,7 @@
 | [x] | delivery-pipeline_20260706 | Delivery pipeline (meshopt geometry + KTX2 + manifest) | 2026-07-06 | 2026-07-09 |
 | [x] | viewer-widget_20260706 | `<dri-viewer>` web component | 2026-07-06 | 2026-07-11 |
 | [x] | harden-migrate_20260706 | Harden & migrate | 2026-07-06 | 2026-07-23 |
+| [~] | etc1s-clevel_20261102 | ETC1S encoder float32 bug: patch the encoder, triage and rebuild the catalog | 2026-11-02 | 2026-11-04 |
 
 <!-- Tracks registered by /conductor:new-track -->
 

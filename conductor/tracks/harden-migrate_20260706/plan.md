@@ -16,7 +16,8 @@ this track *enforces/records* them.
 - [x] Task 1.1: Enforce the decimation budget (spike: `-si 0.2`) as a Hausdorff
       gate in the pipeline (fail/warn on over-budget).
 - [x] Task 1.2: Confirm + record KTX2 mode (spike: ETC1S default, per-variant
-      UASTC option) as the default `--ktx2-mode`.
+      UASTC option) as the default `--ktx2-mode`. *Superseded in part (2026-11-02):*
+      ETC1S now needs a patched encoder; see track `etc1s-clevel_20261102` (preppy#5).
 - [x] Task 1.3: Validate viewer memory policy on a mid-range phone across many
       variants; tune the loaded-glb/decoded-texture LRU. NB (MR !8 review): the
       default `maxCachedVariants: 0` keeps **all** variants resident and

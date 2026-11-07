@@ -4,9 +4,56 @@
 # (ImageMagick, KTX-Software, gltfpack, Node) + the Python package with the
 # `preview` extra so the default thumbnail is a rendered model preview.
 #
-# Derived from singularity/preppy.def. Multi-arch (linux/amd64, linux/arm64):
-# the KTX-Software .deb is selected per-arch via the buildx-provided TARGETARCH.
+# Derived from singularity/preppy.def. Multi-arch (linux/amd64, linux/arm64) via
+# the buildx-provided TARGETARCH.
 ARG BASE_IMAGE=python:3.11-slim
+
+# KTX-Software version and the patches it is built with. KTX_PATCHES must name
+# exactly the files in docker/patches/ktx-software/ (NNNN-<id>.patch -> <id>);
+# the build stage checks that. preppy refuses ETC1S without the encoder patch.
+ARG KTX_VERSION=5.0.0-rc2
+ARG KTX_PATCHES=basisu-etc1-optimizer-double-average
+
+# --- Stage 1: KTX-Software from source, patched (preppy#5) --------------------
+# The basis_universal ETC1S encoder that KTX-Software vendors sums a cluster's
+# colours in float32, so large bright areas can be encoded as flat grey blocks.
+# The release .debs carry that bug, so `ktx` is built here with the fix. Drop
+# this stage for a release .deb once KTX-Software vendors a fixed basis_universal.
+FROM ${BASE_IMAGE} AS ktx-build
+ARG TARGETARCH
+ARG KTX_VERSION
+ARG KTX_PATCHES
+# Optional cap on build parallelism (empty = all cores).
+ARG KTX_BUILD_JOBS=
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates cmake g++ git ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+COPY docker/patches/ktx-software/ /patches/
+RUN set -eux; \
+    found="$(ls /patches/*.patch | sed -E 's#.*/[0-9]+-(.*)\.patch$#\1#' | sort | xargs)"; \
+    declared="$(echo ${KTX_PATCHES} | tr ', ' '\n\n' | sed '/^$/d' | sort | xargs)"; \
+    [ "$found" = "$declared" ] || { echo "KTX_PATCHES ($declared) != patch files ($found)" >&2; exit 1; }; \
+    git clone --depth 1 --branch "v${KTX_VERSION}" \
+        https://github.com/KhronosGroup/KTX-Software.git /src; \
+    for p in /patches/*.patch; do git -C /src apply --verbose "$p"; done; \
+    case "${TARGETARCH}" in \
+        amd64) sse=ON ;; \
+        arm64) sse=OFF ;; \
+        *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    # Release options as in KTX-Software's own Linux package job, tools only.
+    cmake -S /src -B /build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/ktx \
+        -DKTX_FEATURE_TOOLS=ON -DKTX_FEATURE_TOOLS_CTS=OFF \
+        -DKTX_FEATURE_TESTS=OFF -DKTX_FEATURE_LOADTEST_APPS=OFF \
+        -DKTX_FEATURE_DOC=OFF -DKTX_FEATURE_JNI=OFF -DKTX_FEATURE_PY=OFF \
+        -DBASISU_SSE="$sse" -DBASISU_OPENCL=OFF; \
+    cmake --build /build ${KTX_BUILD_JOBS:+--parallel ${KTX_BUILD_JOBS}}; \
+    cmake --install /build; \
+    rm -rf /opt/ktx/include /opt/ktx/lib/cmake
+
+# --- Stage 2: the preppy image -------------------------------------------------
 FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.title="Preppy"
@@ -67,24 +114,14 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && rm -rf /var/lib/apt/lists/* \
     && node -v
 
-# KTX-Software (provides `ktx create`; `toktx` was removed in v5). We require
-# >= v5, which has no final tag yet, so pin the newest v5 pre-release shipping
-# both amd64 and arm64 .debs. Bump to 5.0.0 when it ships.
-# Assets: https://github.com/KhronosGroup/KTX-Software/releases
-ARG KTX_VERSION=5.0.0-rc2
-RUN set -eux; \
-    case "${TARGETARCH}" in \
-        amd64) ktx_arch="x86_64" ;; \
-        arm64) ktx_arch="arm64" ;; \
-        *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac; \
-    curl -fsSL -o /tmp/ktx.deb \
-        "https://github.com/KhronosGroup/KTX-Software/releases/download/v${KTX_VERSION}/KTX-Software-${KTX_VERSION}-Linux-${ktx_arch}.deb"; \
-    apt-get update; \
-    apt-get install -y /tmp/ktx.deb; \
-    rm -f /tmp/ktx.deb; \
-    rm -rf /var/lib/apt/lists/*; \
-    ktx --version
+# KTX-Software (provides `ktx create`; `toktx` was removed in v5), built and
+# patched in the ktx-build stage. PREPPY_KTX_PATCHES declares the patches to
+# preppy: they go into the asset hash, and ETC1S refuses to run without the
+# encoder fix (preppy#5).
+ARG KTX_PATCHES
+COPY --from=ktx-build /opt/ktx/ /usr/local/
+ENV PREPPY_KTX_PATCHES=${KTX_PATCHES}
+RUN ldconfig && ktx --version
 
 # Node CLI tools: gltfpack (geometry). obj2gltf/gltf-pipeline are the deprecated
 # legacy path, kept until it is removed.

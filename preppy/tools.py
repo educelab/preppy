@@ -19,6 +19,7 @@ what is available, and :func:`require` in the leaf modules to fail early with an
 actionable message when a needed tool is missing or too old.
 """
 
+import os
 import platform
 import re
 import shutil
@@ -244,3 +245,17 @@ def format_report(statuses: Dict[str, ToolStatus]) -> str:
             min_note = f' [needs >= {_fmt_version(st.spec.min_version)}]'
         lines.append(f'  [{mark:>7}] {name}{min_note}: {detail}')
     return '\n'.join(lines)
+
+
+#: Environment variable in which a build declares the KTX-Software patches its
+#: ``ktx`` was built with (ids separated by whitespace or commas). The preppy
+#: container sets it for the patches in docker/patches/ktx-software/. Patched and
+#: unpatched builds report the same ``ktx --version``, so this declaration is the
+#: only way preppy can tell them apart.
+KTX_PATCHES_ENV = 'PREPPY_KTX_PATCHES'
+
+
+def ktx_patches() -> Tuple[str, ...]:
+    """The declared ``ktx`` patch ids (see :data:`KTX_PATCHES_ENV`), sorted."""
+    raw = os.environ.get(KTX_PATCHES_ENV, '')
+    return tuple(sorted({p for p in re.split(r'[\s,]+', raw) if p}))

@@ -1,0 +1,34 @@
+{
+  "id": "etc1s-clevel_20261102",
+  "title": "ETC1S encoder float32 bug: patch the encoder, triage and rebuild the catalog",
+  "type": "bug",
+  "status": "in_progress",
+  "created": "2026-11-02T00:00:00Z",
+  "updated": "2026-11-06T00:00:00Z",
+  "depends_on": [],
+  "issue": "https://github.com/educelab/preppy/issues/5",
+  "branch": "5-etc1s-encode-at-default-clevel-corrupts-near-white-regions-of-grayscale-textures",
+  "phases": {
+    "total": 6,
+    "completed": 3
+  },
+  "tasks": {
+    "total": 30,
+    "completed": 20
+  },
+  "current_phase": 5,
+  "current_task": "5.6",
+  "commits": [
+    "56ecb24: texture: Encode ETC1S at --clevel 2 (#5)",
+    "de233af: file_prep: Hash the KTX2 codec options, not just the mode (#5)",
+    "1a29cd6: docs: Record ETC1S --clevel 2 and the codec-option hash (#5)",
+    "1b2142b: conductor: Close etc1s-clevel Phase 1; record the texture-gate design (#5)",
+    "8649d3f: texture: Add a texture quality gate after KTX2 encode (#5)",
+    "e97f9c5: docs: Document the texture gate; close etc1s-clevel Phase 2 (#5)",
+    "27fb21a: texture: Fail on an empty level decode; record the ETC1S root cause (#5)",
+    "9df993d: conductor: Record catalog triage progress and how to resume it (#5)",
+    "51380eb: texture: Return ETC1S to the default --clevel 1 with the patched encoder (#5)",
+    "1bc67db: texture: Require a patched ktx for ETC1S and hash its patches (#5)",
+    "c7acb5d: docker: Build KTX-Software from source with the encoder patch (#5)"
+  ]
+}

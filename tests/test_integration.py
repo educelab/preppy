@@ -84,8 +84,10 @@ def sample(tmp_path):
 def _run(config_path, out_dir, *extra):
     # The sample's obj paths are relative to the config's dir, so point
     # --data-root there (default is the CWD).
+    # The sample's textures are far too small to trigger the unpatched encoder's
+    # bug (preppy#5), so the run is allowed on whatever ktx is installed.
     argv = ['preppy', '-i', str(config_path), '-o', str(out_dir),
-            '--data-root', str(config_path.parent), *extra]
+            '--data-root', str(config_path.parent), '--allow-unpatched-ktx', *extra]
     from preppy.apps import file_prep
     old = sys.argv
     sys.argv = argv

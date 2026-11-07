@@ -49,14 +49,34 @@ From: python:3.11-slim
       nodejs
   node -v
 
-  # Install KTX-Software (>= v5, provides `ktx create`). toktx was removed in v5.
-  # Pin a v5 release .deb; update KTX_VERSION / asset name from
-  # https://github.com/KhronosGroup/KTX-Software/releases as needed.
+  # Install KTX-Software (>= v5, provides `ktx create`; toktx was removed in v5),
+  # built from source with the patches in docker/patches/ktx-software/ (preppy#5).
+  # The basis_universal ETC1S encoder it vendors sums a cluster's colours in
+  # float32, so large bright areas can be encoded as flat grey blocks; the release
+  # .debs carry that bug. Keep KTX_VERSION / KTX_PATCHES in step with the
+  # Dockerfile, and set the same PREPPY_KTX_PATCHES in %environment below.
   KTX_VERSION=5.0.0-rc2
-  curl -fsSL -o /tmp/ktx.deb \
-      "https://github.com/KhronosGroup/KTX-Software/releases/download/v${KTX_VERSION}/KTX-Software-${KTX_VERSION}-Linux-x86_64.deb"
-  DEBIAN_FRONTEND=noninteractive apt install -y /tmp/ktx.deb
-  rm -f /tmp/ktx.deb
+  KTX_PATCHES="basisu-etc1-optimizer-double-average"
+  PATCH_DIR=/usr/local/educelab/preppy/docker/patches/ktx-software
+  found="$(ls ${PATCH_DIR}/*.patch | sed -E 's#.*/[0-9]+-(.*)\.patch$#\1#' | sort | xargs)"
+  declared="$(echo ${KTX_PATCHES} | tr ', ' '\n\n' | sed '/^$/d' | sort | xargs)"
+  [ "$found" = "$declared" ] || { echo "KTX_PATCHES ($declared) != patch files ($found)" >&2; exit 1; }
+  DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+      ca-certificates cmake ninja-build
+  git clone --depth 1 --branch "v${KTX_VERSION}" \
+      https://github.com/KhronosGroup/KTX-Software.git /tmp/ktx-src
+  for p in ${PATCH_DIR}/*.patch; do git -C /tmp/ktx-src apply --verbose "$p"; done
+  # Release options as in KTX-Software's own Linux (x86_64) package job, tools only.
+  cmake -S /tmp/ktx-src -B /tmp/ktx-build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DKTX_FEATURE_TOOLS=ON -DKTX_FEATURE_TOOLS_CTS=OFF \
+      -DKTX_FEATURE_TESTS=OFF -DKTX_FEATURE_LOADTEST_APPS=OFF \
+      -DKTX_FEATURE_DOC=OFF -DKTX_FEATURE_JNI=OFF -DKTX_FEATURE_PY=OFF \
+      -DBASISU_SSE=ON -DBASISU_OPENCL=OFF
+  cmake --build /tmp/ktx-build
+  cmake --install /tmp/ktx-build
+  rm -rf /tmp/ktx-src /tmp/ktx-build /usr/local/include/ktx*.h /usr/local/include/KHR /usr/local/lib/cmake/ktx
+  ldconfig
   ktx --version
 
   # Install the node-based tools.
@@ -93,6 +113,9 @@ From: python:3.11-slim
 %environment
   # Headless offscreen GL backend for the pyrender model-preview thumbnail.
   export PYOPENGL_PLATFORM=osmesa
+  # The patches ktx was built with (%post). preppy hashes them, and refuses ETC1S
+  # without the encoder fix (preppy#5). Keep in step with KTX_PATCHES above.
+  export PREPPY_KTX_PATCHES="basisu-etc1-optimizer-double-average"
 
 %runscript
 #!/bin/bash

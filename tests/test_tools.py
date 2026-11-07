@@ -114,3 +114,12 @@ def test_require_raises_with_all_problems(monkeypatch):
         assert 'ktx' in str(e) and 'gltfpack' in str(e)
     else:  # pragma: no cover
         raise AssertionError('require() should have raised')
+
+
+def test_ktx_patches_parses_env(monkeypatch):
+    # The preppy container declares the KTX-Software patches it built with
+    # (preppy#5); the hash and the unpatched-ktx refusal read this.
+    monkeypatch.setenv(tools.KTX_PATCHES_ENV, ' b-patch, a-patch  b-patch\n')
+    assert tools.ktx_patches() == ('a-patch', 'b-patch')
+    monkeypatch.delenv(tools.KTX_PATCHES_ENV)
+    assert tools.ktx_patches() == ()

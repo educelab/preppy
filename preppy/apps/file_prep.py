@@ -128,7 +128,25 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
             thumb_src = png
         normalized_by_ref[Path(img).name] = png
         ktx2_by_material[name] = texture.encode_ktx2(
-            png, dst=var_tmp / f'{name}.ktx2', mode=opts.ktx2_mode)
+            png, dst=var_tmp / f'{name}.ktx2', mode=opts.ktx2_mode,
+            allow_unpatched=opts.allow_unpatched_ktx)
+        # 2b. Texture gate (preppy#5): every mip level against the same chain
+        #     left uncompressed, before the asset is written.
+        if opts.texture_check:
+            res = texture.validate_ktx2(png, ktx2_by_material[name],
+                                        tmp_dir=var_tmp)
+            if res.passed:
+                worst = max(res.level_fractions, default=0.0)
+                log.info('  texture-checked %s/%s: %d levels, worst %.2f%%',
+                         suffix, name, len(res.level_fractions), worst * 100)
+            else:
+                lvl = res.worst_level
+                msg = (f'variant {suffix!r}: texture {name!r} mip level {lvl} '
+                       f'has {res.level_fractions[lvl] * 100:.2f}% defective 4x4 '
+                       f'blocks (limit {res.max_fraction * 100:g}%); see preppy#5')
+                if opts.on_texture_defect == 'fail':
+                    raise RuntimeError(msg)
+                log.warning('  %s (continuing; --on-texture-defect warn)', msg)
 
     # 3. gltfpack -> decimated meshopt geometry glb (UVs kept "used"). Smooth
     #    vertex normals are baked from the un-quantized OBJ first (Phase 7) so the
@@ -173,7 +191,12 @@ def process_variant(object_cfg: Mapping, variant: Mapping, *,
     # 4. Name the output asset (content hash over inputs+config, never output).
     digest = None
     if opts.hash_names:
+        # The codec options, not just the mode: a change to how a mode encodes
+        # (e.g. --clevel, preppy#5) must rename the `immutable` asset.
         config = {'target_error': opts.target_error, 'ktx2_mode': opts.ktx2_mode,
+                  'ktx2_codec_args': texture.ktx2_codec_args(opts.ktx2_mode),
+                  # Patched and unpatched ktx share a version string (preppy#5).
+                  'ktx_patches': list(tools.ktx_patches()),
                   'max_dim': opts.max_dim, 'nodata_fill': nodata,
                   'smooth_normals': opts.smooth_normals,
                   'force_smooth_normals': opts.force_smooth_normals}
@@ -301,6 +324,21 @@ def _build_parser() -> argparse.ArgumentParser:
                           help='Default atlas no-data fill color (hex, # optional) '
                                'to back-fill from the nearest chart pixel '
                                '(overridden per object/variant by nodataFill)')
+    tex_opts.add_argument('--allow-unpatched-ktx', action='store_true',
+                          help='Encode ETC1S even when ktx is not declared patched '
+                               '(PREPPY_KTX_PATCHES). An unpatched encoder can write '
+                               'flat grey blocks into large bright areas (preppy#5); '
+                               'the preppy container is patched')
+    tex_opts.add_argument('--texture-check', default=True,
+                          action=argparse.BooleanOptionalAction,
+                          help='Check every mip level of each encoded KTX2 against '
+                               'the same chain left uncompressed, for blocks the '
+                               'encode got wrong (default: on; needs only ktx)')
+    tex_opts.add_argument('--on-texture-defect', choices=['fail', 'warn'],
+                          default='fail',
+                          help="Action when a texture fails the check: 'fail' "
+                               "aborts the run, 'warn' logs and continues "
+                               '(default: fail)')
 
     geo_opts = parser.add_argument_group('geometry options')
     geo_opts.add_argument('-s', '--decimate-error', type=float,
@@ -408,6 +446,13 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(message)s')
 
     args = _normalize_args(_build_parser().parse_args())
+
+    # Refuse an unpatched encoder before any work starts (preppy#5).
+    if not args.allow_unpatched_ktx:
+        try:
+            texture.require_patched_ktx(args.ktx2_mode)
+        except RuntimeError as e:
+            raise SystemExit(str(e))
 
     # A per-tool wall-clock ceiling so a wedged encoder can't hang the batch;
     # 0 (or negative) disables it. Applies to every tools.run() call this run.

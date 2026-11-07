@@ -1,0 +1,58 @@
+basisu: Accumulate the ETC1 optimizer's average colour in double
+
+Applies to: KTX-Software v5.0.0-rc2 (vendored basis_universal, lib version 210),
+            from the source root: `git apply <this file>`.
+Fixes:      educelab/preppy#5 (from educelab/dri-voyager#13).
+
+etc1_optimizer::init sums a cluster's pixel colours into a float32 vec3F. Past
+2^32 the spacing between float32 values exceeds 510, so adding a pixel of 255 no
+longer changes the sum. For a large bright ETC1S endpoint cluster (more than about
+16.8M pixels of 255; ETC1S shares one codebook across all mip levels, so this
+happens on 8K textures with large clipped-white areas) the average comes out far
+too dark. Example: PHerc1166Cr01 IR1050 FE2's white cluster averages 148.97
+instead of 254.95. The cluster then gets an endpoint that can't represent white,
+and the encoded texture shows flat grey blocks in some mip levels.
+
+Summing in double fixes it. With this patch, at the default --clevel 1, that
+cluster gets base 255 / table 0 and every mip level encodes cleanly.
+
+Upstream:   https://github.com/BinomialLLC/basis_universal/issues/476
+            https://github.com/KhronosGroup/KTX-Software/issues/1324
+
+Drop this patch when a KTX-Software release vendors a basis_universal with the
+accumulation fixed (as of 2026-11, basis_universal master still sums in float32).
+
+diff --git a/external/basis_universal/encoder/basisu_etc.cpp b/external/basis_universal/encoder/basisu_etc.cpp
+index 5bae228..1a68084 100644
+--- a/external/basis_universal/encoder/basisu_etc.cpp
++++ b/external/basis_universal/encoder/basisu_etc.cpp
+@@ -1010,7 +1010,9 @@ namespace basisu
+ 
+ 		m_limit = m_pParams->m_use_color4 ? 15 : 31;
+ 
+-		vec3F avg_color(0.0f);
++		// Accumulate in double: a float32 sum stops growing past 2^32, so the average
++		// of a large bright cluster (> ~16.8M pixels of 255) comes out far too dark.
++		double sum_r = 0, sum_g = 0, sum_b = 0;
+ 
+ 		m_luma.resize(n);
+ 		m_sorted_luma_indices.resize(n);
+@@ -1031,14 +1033,14 @@ namespace basisu
+ 			max_g = basisu::maximum<int>(max_g, c.g);
+ 			max_b = basisu::maximum<int>(max_b, c.b);
+ 
+-			const vec3F fc(c.r, c.g, c.b);
+-
+-			avg_color += fc;
++			sum_r += c.r;
++			sum_g += c.g;
++			sum_b += c.b;
+ 
+ 			m_luma[i] = static_cast<uint16_t>(c.r + c.g + c.b);
+ 			m_sorted_luma_indices[i] = i;
+ 		}
+-		avg_color /= static_cast<float>(n);
++		const vec3F avg_color((float)(sum_r / n), (float)(sum_g / n), (float)(sum_b / n));
+ 		m_avg_color = avg_color;
+ 		m_max_comp_spread = basisu::maximum(basisu::maximum(max_r - min_r, max_g - min_g), max_b - min_b);
+ 

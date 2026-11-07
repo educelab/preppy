@@ -34,6 +34,18 @@ deps installed once as shown above.
 > uses `ktx create`. If `brew install ktx` is unavailable on your platform, grab a
 > release from https://github.com/KhronosGroup/KTX-Software/releases.
 
+> **ETC1S (the default `--ktx2-mode`) needs a patched `ktx`.** The basis_universal
+> encoder in every KTX-Software release to date (including `brew install ktx` and the
+> release `.deb`s) sums a cluster's colours in float32. On textures with large bright
+> areas it can write flat grey blocks into some mip levels ([#5](https://github.com/educelab/preppy/issues/5)).
+> The [Docker](#docker) and Singularity images build KTX-Software from source with
+> the fix in [`docker/patches/ktx-software/`](docker/patches/ktx-software/) and
+> declare it in `PREPPY_KTX_PATCHES`. Without that declaration `preppy` refuses
+> ETC1S before doing any work. Use the container, build `ktx` with the patch
+> yourself (and set `PREPPY_KTX_PATCHES` to the patch ids), pass
+> `--allow-unpatched-ktx` to encode anyway, or use `--ktx2-mode uastc`, which is
+> unaffected.
+
 Verify everything is installed and new enough:
 
 ```shell
@@ -86,7 +98,10 @@ current hashed URIs. Useful flags:
 
 | Flag | Effect |
 | --- | --- |
-| `--ktx2-mode {etc1s,uastc}` | KTX2/Basis codec (default `etc1s`) |
+| `--ktx2-mode {etc1s,uastc}` | KTX2/Basis codec (default `etc1s`, at the encoder's default effort; needs the patched `ktx` in the preppy container, see preppy#5) |
+| `--allow-unpatched-ktx` | encode ETC1S with a `ktx` not declared patched (see the note under Installation) |
+| `--no-texture-check` | skip the texture gate: every mip level of each encoded KTX2 checked against the same chain left uncompressed (default on; about 35 s per 8K texture) |
+| `--on-texture-defect {fail,warn}` | action when a texture fails the gate (default `fail`) |
 | `-s/--decimate-error FLOAT` | gltfpack `-si` target (default `0.2`) |
 | `--no-decimate` | meshopt-compress without simplifying |
 | `--nodata-fill COLOR` | default atlas no-data fill (hex, `#` optional) to back-fill from the nearest chart pixel |
@@ -160,7 +175,14 @@ To build it locally (see [`Dockerfile`](Dockerfile)):
 
 ```shell
 docker build -t preppy .
+docker build --build-arg KTX_BUILD_JOBS=8 -t preppy .   # cap the KTX-Software compile's cores
 ```
+
+The image builds KTX-Software from source with the patches in
+[`docker/patches/ktx-software/`](docker/patches/ktx-software/) (see the note under
+Installation). Each patch file's header says why it exists and when to drop it.
+`KTX_PATCHES` in the Dockerfile (and in `singularity/preppy.def`) must list exactly
+those patch files; the build fails otherwise.
 
 ### ImageMagick resource limits
 

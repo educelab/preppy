@@ -172,6 +172,10 @@ the mesh (keep the loaded node hierarchy; never bake into the quantized position
   sufficient; **no pipeline normal-bake step needed** (simplifies the pipeline; the
   per-wedge seam risk did not manifest visibly on these near-flat trays).
 - **KTX2 mode:** **ETC1S** — no visible quality difference vs UASTC; use ETC1S (9× smaller).
+  *Later (2026-11-02):* at the default `--clevel 1`, ETC1S corrupted mid mip levels of
+  some grayscale textures, which this comparison didn't sample. ETC1S stays the
+  default, with a patched encoder (a float32 accumulation bug in basis_universal); see
+  preppy#5 / track `etc1s-clevel_20261102`.
 - **Atlas "no-data" padding bleed (NEW):** band 2's source atlas has an **orange no-data
   background**; it bleeds into chart edges (worse via mipmaps) as a yellow tint. Confirmed
   it is *not* the downscale and *not* ETC1S (decoded KTX2 == source). **Pipeline must
